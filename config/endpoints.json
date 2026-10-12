@@ -1,0 +1,824 @@
+{
+  "_comment": "采集接口注册表 V5（2026-09-24，直连化改造：用户批准解除『脚本禁止直连源系统API』禁令）。默认采集路径=scripts/fetch-endpoints.mjs 直调两系统只读查询接口（凭据经CDP从专用浏览器实时收割，见harvest-auth.mjs）；本表新增 base_api/method/params 驱动直连请求（参数依据两份API抓包文档，日期token：@today/@yesterday/@last7/@last365/@wide=2015-01-01/@window_s/@window_e=增量时间窗按槽位早昨日晚当日）。原 page/wait_text/mode 字段保留，仅供浏览器UI兜底采集（直连失败/接口改版排查时）使用。tier 批次分层不变——poll=预警轮询+早晚 ｜ morning=早间轻数据 ｜ increment=增量(早昨日窗/晚当日窗) ｜ snapshot=晚间全量快照 ｜ detail=晚间明细 ｜ weekly=周一 ｜ onetime=首跑。多客URL形态 index.php+PATH_INFO [待实测，404则自愈为查询串路由]；goods全量快照用@wide宽窗口防漏款 [待实测]。源系统改版时由智能体自愈更新本文件并在 _comment 记变更。大列表page_size=500（物料/样板/裁床/成品库存/财务明细/供应商）[待实测:服务端每页上限，若被cap更低，total驱动终止会自动续页不丢数据，多客仍20/页短页终止] | 2026-09-28 duoke_goods.jsonl 置 no_version（9999 bi key not exist 自愈）",
+  "yizhe": {
+    "base_page": "https://scm.yizheyun.com",
+    "base_api": "https://api.yizheyun.com",
+    "login_check": {
+      "page": "/sample-management/list",
+      "logged_in_marker": "员工"
+    },
+    "endpoints": [
+      {
+        "page": "/board/ott-board",
+        "api": "/common/ott_manage/get_header_data",
+        "params": {
+          "status_list": [
+            1,
+            2
+          ]
+        },
+        "mode": "A",
+        "tier": "poll",
+        "file": "yizhe_header.json",
+        "wait_text": [
+          "生产订单数"
+        ],
+        "fields": [
+          "production_num",
+          "order_num",
+          "stock_out_num",
+          "stock_in_num",
+          "inventory_num",
+          "owed_num"
+        ],
+        "note": "生产总览（轮询+早晚）"
+      },
+      {
+        "page": "/board/ott-board",
+        "api": "/common/ott_manage/get_warn_data",
+        "params": {
+          "status_list": [
+            1,
+            2
+          ]
+        },
+        "mode": "A",
+        "tier": "poll",
+        "file": "yizhe_warn.json",
+        "wait_text": [
+          "生产订单数"
+        ],
+        "fields": [
+          "total_error",
+          "time_error",
+          "date_error",
+          "no_factory_count",
+          "no_buyer_count"
+        ],
+        "note": "生产异常统计（轮询核心）"
+      },
+      {
+        "page": "/stock-list",
+        "api": "/common/stock_store/get_stock_list",
+        "params": {
+          "only_has_stock": 1
+        },
+        "mode": "A+B",
+        "tier": "snapshot",
+        "page_size": 500,
+        "file": "yizhe_stock_list.jsonl",
+        "list_path": "data.list",
+        "total_relaxed": true,
+        "wait_text": [
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "template_name",
+          "total_num",
+          "design_user",
+          "created_at"
+        ],
+        "note": "成品库存(款级，晚间快照)。⚠️校验口径：UI total 含零库存已下单款，list 只含有库存款（实测=页数×每页条数+尾页余数），短页终止为准，total_relaxed=不按total对账"
+      },
+      {
+        "page": "/sample-management/list",
+        "api": "/common/template/get_template_list",
+        "params": {
+          "empty_bom_warn": 2,
+          "current_step_ids": [],
+          "wait_step_ids": [],
+          "done_step_ids": []
+        },
+        "mode": "B",
+        "tier": "detail",
+        "page_size": 500,
+        "file": "yizhe_template_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "template_name",
+          "cat_name",
+          "brand_name",
+          "design_user",
+          "template_price",
+          "template_status_name"
+        ],
+        "incremental": {
+          "strategy": "created_since_last",
+          "full_cadence": "weekly"
+        },
+        "note": "样板列表（款号映射基础）：直连全量约10秒，晚间全采+周一兜底回捞"
+      },
+      {
+        "page": "/documentary-management",
+        "api": "/common/follow_order/get_follow_order_list",
+        "params": {
+          "status_list": [
+            1,
+            2
+          ]
+        },
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 100,
+        "file": "yizhe_follow_orders.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "production_type_desc",
+          "back_order_times",
+          "less_finish_time",
+          "current_step",
+          "factory_name",
+          "follower_user_name",
+          "price"
+        ],
+        "note": "跟单进度/返单次数/超期（在产单，午间/晚间全采，量小）"
+      },
+      {
+        "page": "/production-order",
+        "api": "/common/production/get_production_list",
+        "params": {
+          "status_list": [
+            1,
+            2
+          ]
+        },
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 100,
+        "file": "yizhe_production_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "总订单数量",
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "production_sn",
+          "production_type_desc",
+          "back_order_times",
+          "status_desc",
+          "plan_total_num",
+          "cuted_num",
+          "stock_out_num",
+          "stock_in_num",
+          "factory_name",
+          "follower_user_name",
+          "created_at"
+        ],
+        "note": "生产订单明细（在产单）"
+      },
+      {
+        "page": "/purchase-order/list",
+        "api": "/common/purchase/get_purchase_list",
+        "params": {
+          "buyer_id": "",
+          "buy_status_list": [
+            1,
+            2
+          ],
+          "reach_status_list": [
+            1,
+            2
+          ],
+          "sort_type": "desc",
+          "sort_field": "created_at",
+          "filter_assign": 0,
+          "filter_bom_updated": 0,
+          "filter_delay": 0,
+          "filter_no_buyer": 0,
+          "filter_main_buy_not_done": 0,
+          "filter_acc_buy_not_done": 0,
+          "filter_need_feeding": 0
+        },
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 100,
+        "file": "yizhe_purchase_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "共搜索到",
+          "采购延期",
+          "暂无数据"
+        ],
+        "fields": [
+          "purchase_sn",
+          "template_no",
+          "buy_status_desc",
+          "reach_status_desc",
+          "buyer_name",
+          "factory_name",
+          "plan_total_num"
+        ],
+        "note": "采购状态/采购延期"
+      },
+      {
+        "page": "/documentary-management",
+        "api": "/common/cuted_order_panel/record_list",
+        "params": {
+          "status_list": [
+            2
+          ]
+        },
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 500,
+        "file": "yizhe_cuted_records.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "裁货时间",
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "record_id",
+          "total_num",
+          "cuted_at",
+          "cuted_sort_name",
+          "plan_total_num",
+          "stock_out_num"
+        ],
+        "note": "裁床记录（status_list=[2]已裁货）"
+      },
+      {
+        "page": "/documentary-management",
+        "api": "/common/stockout_panel/record_list",
+        "params": {
+          "status_list": 2,
+          "created_at": [
+            "@last7",
+            "@today"
+          ]
+        },
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 100,
+        "file": "yizhe_stockout_records.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "本次出货",
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "stockout_at",
+          "total_num",
+          "stockout_sort_name",
+          "less_finish_time"
+        ],
+        "incremental": {
+          "strategy": "created_since_last",
+          "window_days": 7
+        },
+        "note": "出货记录（注意status_list为int非数组；历史量大，日常只采近7日；created_at筛选参数[待实测]）"
+      },
+      {
+        "page": "/wear-in-stock",
+        "api": "/common/instock/get_instock_list",
+        "params": {
+          "status_list": [
+            1,
+            2
+          ]
+        },
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 100,
+        "file": "yizhe_instock_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "待入库",
+          "已入库",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "production_sn",
+          "stockout_num",
+          "instock_num",
+          "bad_num",
+          "created_at",
+          "factory_name"
+        ],
+        "note": "成衣入库/待入库（US-01日报指标）"
+      },
+      {
+        "page": "/surface-material-management/stock",
+        "api": "/common/material_store/get_material_store_list",
+        "params": {
+          "material_type": 1,
+          "view_type": 1,
+          "only_has_stock": 2
+        },
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 500,
+        "file": "yizhe_material_store.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "合计货值",
+          "暂无数据"
+        ],
+        "fields": [
+          "material_sn",
+          "material_name",
+          "total_num",
+          "avg_price",
+          "total_price",
+          "supply_name"
+        ],
+        "note": "物料库存大列表——直连约30秒；可改 only_has_stock=1 减量或降周采"
+      },
+      {
+        "page": "/finance-management/order",
+        "api": "/backend/finance/get_production_process_list",
+        "params": {},
+        "mode": "A+B",
+        "tier": "detail",
+        "page_size": 500,
+        "file": "yizhe_finance_process_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "核对状态",
+          "暂无数据"
+        ],
+        "fields": [
+          "template_no",
+          "production_sn",
+          "price",
+          "template_price",
+          "paid_status_desc",
+          "stock_in_price",
+          "cuted_price"
+        ],
+        "note": "成本明细（按订单，财务版）"
+      },
+      {
+        "page": "/finance-management/detail",
+        "api": "/backend/finance/get_finance_purchase_sum",
+        "params": {
+          "created_at": [
+            "@last365",
+            "@today"
+          ],
+          "paid_status_list": [
+            1,
+            3
+          ]
+        },
+        "mode": "A",
+        "tier": "morning",
+        "file": "yizhe_finance_sum.json",
+        "wait_text": [
+          "总金额"
+        ],
+        "fields": [
+          "sum_total_price",
+          "sum_wait_bill_price"
+        ],
+        "note": "财务待付汇总（模式A，轻；对齐页面默认近一年+待核对/部分核对）"
+      },
+      {
+        "page": "/sample-management/data-statistics",
+        "api": "/common/template_stat/summary",
+        "params": {
+          "created_at": [
+            "@last7",
+            "@today"
+          ]
+        },
+        "mode": "A",
+        "tier": "morning",
+        "file": "yizhe_stat_summary.json",
+        "wait_text": [
+          "建版数量"
+        ],
+        "fields": [
+          "build",
+          "ordered",
+          "scrap",
+          "finish"
+        ],
+        "note": "研发统计汇总（页面默认近7天窗口）"
+      },
+      {
+        "page": "/sample-management/data-statistics",
+        "api": "/common/template_stat/design_efficiency",
+        "params": {
+          "created_at": [
+            "@last7",
+            "@today"
+          ]
+        },
+        "mode": "A",
+        "tier": "morning",
+        "file": "yizhe_stat_design_efficiency.json",
+        "wait_text": [
+          "设计效率"
+        ],
+        "fields": [
+          "list"
+        ],
+        "note": "设计师效率表 [待实测:created_at参数]"
+      },
+      {
+        "page": "/sample-management/data-statistics",
+        "api": "/common/template_stat/top_category",
+        "params": {
+          "created_at": [
+            "@last7",
+            "@today"
+          ]
+        },
+        "mode": "A",
+        "tier": "morning",
+        "file": "yizhe_stat_top_category.json",
+        "wait_text": [
+          "Top10",
+          "品类"
+        ],
+        "fields": [
+          "total_pieces",
+          "list"
+        ],
+        "note": "Top品类 [待实测:created_at参数]"
+      },
+      {
+        "page": "/sample-management/data-statistics",
+        "api": "/common/template_stat/role_share",
+        "params": {
+          "created_at": [
+            "@last7",
+            "@today"
+          ],
+          "user_type": 1
+        },
+        "mode": "A",
+        "tier": "morning",
+        "file": "yizhe_stat_role_share.json",
+        "wait_text": [
+          "样板数占比"
+        ],
+        "fields": [
+          "total_template_count",
+          "list"
+        ],
+        "note": "样板数占比（user_type=1设计师维度）"
+      },
+      {
+        "page": "/warning-setting",
+        "api": "/backend/company_mgr/get_company_warn_config_v2",
+        "params": {},
+        "mode": "A",
+        "tier": "onetime",
+        "file": "yizhe_warn_config.json",
+        "wait_text": [
+          "件数预警",
+          "货期预警"
+        ],
+        "fields": [
+          "process_warn",
+          "other_warn"
+        ],
+        "note": "预警阈值配置（部署首跑+客户改配置后）"
+      },
+      {
+        "page": "/factory-management",
+        "api": "/common/factory/get_factory_list",
+        "params": {
+          "show_status": [
+            1,
+            2
+          ]
+        },
+        "mode": "A+B",
+        "tier": "weekly",
+        "page_size": 100,
+        "file": "yizhe_factory_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "factory_id",
+          "factory_name",
+          "cat_name",
+          "follower_name",
+          "last_order_time"
+        ],
+        "note": "工厂清单"
+      },
+      {
+        "page": "/supplier-management",
+        "api": "/common/supply/get_supply_list",
+        "params": {
+          "show_status": [
+            1,
+            2
+          ],
+          "with_byb": 1
+        },
+        "mode": "A+B",
+        "tier": "weekly",
+        "page_size": 500,
+        "file": "yizhe_supply_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "共搜索到",
+          "暂无数据"
+        ],
+        "fields": [
+          "supply_id",
+          "supply_name",
+          "supply_contact",
+          "mobile"
+        ],
+        "note": "供应商清单（仅周一）"
+      },
+      {
+        "page": "/staff-management",
+        "api": "/common/user/get_user_list",
+        "params": {},
+        "mode": "A+B",
+        "tier": "weekly",
+        "page_size": 100,
+        "file": "yizhe_user_list.jsonl",
+        "list_path": "data.list",
+        "wait_text": [
+          "在职员工",
+          "共搜索到"
+        ],
+        "fields": [
+          "user_id",
+          "name",
+          "role_names",
+          "mobile"
+        ],
+        "note": "员工清单 [待实测:字段名]"
+      }
+    ]
+  },
+  "duoke": {
+    "base_page": "https://air.duoke.net",
+    "base_api": "https://api.duoke.net/index.php",
+    "login_check": {
+      "page": "/",
+      "logged_in_marker": "概览"
+    },
+    "endpoints": [
+      {
+        "page": "/",
+        "api": "/analysis/console_summary",
+        "method": "POST",
+        "params": {},
+        "mode": "A",
+        "tier": "morning",
+        "file": "duoke_console_summary.json",
+        "wait_text": [
+          "今日交易"
+        ],
+        "fields": [
+          "today_doc_amount",
+          "today_doc_money",
+          "today_doc_goods_amount",
+          "transaction_top10"
+        ],
+        "note": "经营概览（模式A，轻）"
+      },
+      {
+        "page": "/",
+        "api": "/analysis/console_summary_v2",
+        "method": "POST",
+        "params": {
+          "chart_type": "turn_over",
+          "range_type": "last_2_years_by_month"
+        },
+        "mode": "A",
+        "tier": "morning",
+        "file": "duoke_console_summary_v2.json",
+        "wait_text": [
+          "今日交易"
+        ],
+        "fields": [
+          "chart_type",
+          "range_type",
+          "result.data"
+        ],
+        "note": "两年月度营业额/销量（直连后无需页面切图表触发）"
+      },
+      {
+        "page": "/goods/list",
+        "api": "/goods/get_by_order",
+        "params": {
+          "bi_key": "productList-instock",
+          "days": -1,
+          "sday": "@wide",
+          "eday": "@today",
+          "order": "utime",
+          "isasc": 0,
+          "keyword": "",
+          "show_sku": 1,
+          "goods_status": "{\"options\":[\"disable=0\"],\"allSelected\":0}",
+          "dimension": "{\"options\":[\"goods\"],\"allSelected\":0}"
+        },
+        "mode": "A+B",
+        "tier": "snapshot",
+        "page_size": 20,
+        "file": "duoke_goods.jsonl",
+        "list_path": "list",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "fields": [
+          "item_ref",
+          "name",
+          "sku.warehouse_0",
+          "sku.price_in",
+          "sku.price_1"
+        ],
+        "note": "商品+SKU库存(晚间快照核心)。@wide宽窗口保全量；无total字段，短页终止——历史库存回溯唯一途径 [待实测:宽窗口]",
+        "no_version": true,
+        "_comment": "2026-09-28 实测：GET带version报9999 bi key not exist，同payment/view_all，置no_version（浏览器GET也不带version）"
+      },
+      {
+        "page": "/goods/list",
+        "api": "/analysis/get_goods_sale_trend",
+        "method": "POST",
+        "special": "sale_trend",
+        "params": {
+          "days": 30
+        },
+        "mode": "B",
+        "tier": "detail",
+        "file": "duoke_sale_trend.json",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "fields": [
+          "goods.{id}.trend",
+          "goods.{id}.total"
+        ],
+        "note": "单款30日动销(补货核心输入)。直连特例：读当日duoke_goods.jsonl的goods id按50个/批合并拉取"
+      },
+      {
+        "page": "/finance/order",
+        "api": "/order/new_view_all",
+        "params": {
+          "bi_key": "documentList",
+          "type": "custom",
+          "sday": "@window_s",
+          "eday": "@window_e",
+          "order_type": "{\"options\":[\"sale_order\"],\"allSelected\":0}",
+          "keyword": ""
+        },
+        "mode": "A+B",
+        "tier": "increment",
+        "page_size": 20,
+        "file": "duoke_orders.jsonl",
+        "list_path": "list",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "incremental": {
+          "param": "type=custom + sday/eday",
+          "morning_window": "昨日",
+          "evening_window": "当日"
+        },
+        "fields": [
+          "number",
+          "shop_name",
+          "calc_price",
+          "goods_quantity",
+          "customer_name",
+          "seller_name",
+          "ctime"
+        ],
+        "note": "销售单据（增量：早间昨日窗/晚间当日窗；历史回捞同参数扩窗口；退货=负数自然冲减）"
+      },
+      {
+        "page": "/finance/flow",
+        "api": "/payment/view_all",
+        "params": {
+          "bi_key": "billList",
+          "type": "custom",
+          "sday": "@window_s",
+          "eday": "@window_e",
+          "keyword": ""
+        },
+        "mode": "A+B",
+        "tier": "increment",
+        "page_size": 20,
+        "file": "duoke_payments.jsonl",
+        "list_path": "list",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "incremental": {
+          "param": "type=custom + sday/eday",
+          "morning_window": "昨日",
+          "evening_window": "当日"
+        },
+        "fields": [
+          "price",
+          "payment_name",
+          "seller_name",
+          "client_name",
+          "ctime"
+        ],
+        "note": "收支流水（增量同上；响应list_num可对total）",
+        "no_version": true,
+        "_comment": "2026-09-28 GET带version会报9999 bi key not exist，浏览器GET也不带version，故no_version=true"
+      },
+      {
+        "page": "/relation/client",
+        "api": "/customer/get_by_order",
+        "params": {
+          "bi_key": "clientList",
+          "days": -1,
+          "sday": "@wide",
+          "eday": "@today",
+          "order": "utime",
+          "isasc": 0,
+          "client_status": "{\"options\":[\"disable=0\"],\"allSelected\":0}",
+          "type": 1
+        },
+        "mode": "A+B",
+        "tier": "weekly",
+        "page_size": 20,
+        "file": "duoke_customers.jsonl",
+        "list_path": "list",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "fields": [
+          "id",
+          "name",
+          "phone",
+          "debt",
+          "days_not_purchased",
+          "goods_num",
+          "staff_name",
+          "address"
+        ],
+        "note": "客户资料（仅周一；address类型不固定需兼容）"
+      },
+      {
+        "page": "/more/staff-management",
+        "api": "/user/admin_get_staff_list",
+        "params": {},
+        "mode": "A",
+        "tier": "weekly",
+        "file": "duoke_staff.json",
+        "wait_text": [
+          "销售员",
+          "管理员"
+        ],
+        "fields": [
+          "result.data"
+        ],
+        "note": "员工角色分组"
+      },
+      {
+        "page": "/setting/goods-category",
+        "api": "/data_center/get_data",
+        "method": "POST",
+        "params": {
+          "type": "goods",
+          "data_code": "get_category_list",
+          "app_pid": 31,
+          "app_version": "2.76.23"
+        },
+        "mode": "A",
+        "tier": "weekly",
+        "file": "duoke_data_center.json",
+        "wait_text": [
+          "分类"
+        ],
+        "fields": [
+          "data"
+        ],
+        "note": "分类/颜色/尺码维度（app_version随发版变，失配自愈）"
+      }
+    ]
+  }
+}

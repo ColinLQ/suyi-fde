@@ -1,0 +1,13 @@
+# 运行时数据（含采集凭据与业务数据，严禁入库）
+state/
+data/
+out/
+
+# 本机私有配置（企微 webhook 等）
+config/*.local.json
+
+# 杂项
+.DS_Store
+__pycache__/
+*.pyc
+node_modules/

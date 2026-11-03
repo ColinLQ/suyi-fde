@@ -31,8 +31,10 @@ ar = Alignment(horizontal="right", vertical="center")
 from pathlib import Path
 SKILL = str(Path(__file__).resolve().parent.parent)
 PIC = f"{SKILL}/state/goods-pics"
-J = json.load(open(f"{SKILL}/out/销售数据报告-2026-10-12.json", encoding="utf-8"))
-OUT = f"{SKILL}/out/销售数据报表-2026-10-12.xlsx"
+import datetime
+DATE = sys.argv[sys.argv.index("--date") + 1] if "--date" in sys.argv else datetime.date.today().isoformat()
+J = json.load(open(f"{SKILL}/out/销售数据报告-{DATE}.json", encoding="utf-8"))
+OUT = f"{SKILL}/out/销售数据报表-{DATE}.xlsx"
 IMG = 100
 wb = openpyxl.Workbook(); wb.remove(wb.active)
 NO = [0]
@@ -87,17 +89,18 @@ def sheet(title, headers, rows, types, widths, note=None, img_col=None, img_key=
         ws.cell(2+len(rows)+2, 1, note).font = fn; ws.cell(2+len(rows)+2, 1).alignment = al
     return ws
 
+# 01 总览（V2.4：补单→复购=客户再次购买同一款）
 ov = J["overview"]; p30 = ov["p30"]
-
-# 01 总览
+RPS = J.get("repurchase", {})
 rows = []
 for k, lb in [("p7","近7日"),("p15","近半月"),("p30","近30日")]:
-    p = ov[k]; rows.append([lb,p["orders"],p["buyN"],p["amt"],p["qty"],p["attach"],p["newBuyN"],p["newAmt"],p["newAttach"],p["oldBuyN"],p["oldAmt"],p["oldAttach"],p["reorderAmt"]])
+    p = ov[k]; rp = RPS.get(k, {})
+    rows.append([lb,p["orders"],p["buyN"],p["amt"],p["qty"],p["attach"],p["newBuyN"],p["newAmt"],p["newAttach"],p["oldBuyN"],p["oldAmt"],p["oldAttach"],rp.get("amt",0),rp.get("buyN",0)])
 sheet("日周月下单回款总览【需求9】",
-    ["周期","单数","购买单数","金额(¥)","件数","连带(件/单)","新客购买单数","新客金额(¥)","新客连带","老客购买单数","老客金额(¥)","老客连带","补单金额(¥)"],
-    rows, ["t","n","n","m","n","p1","n","m","p1","n","m","p1","m"],
-    [10,8,10,14,10,11,12,13,10,12,13,10,13],
-    note="数据截至2026-10-12上午；客户按同人账户合并；补单=老客再下单口径。")
+    ["周期","单数","购买单数","金额(¥)","件数","连带(件/单)","新客购买单数","新客金额(¥)","新客连带","老客购买单数","老客金额(¥)","老客连带","复购金额(¥)","复购单数"],
+    rows, ["t","n","n","m","n","p1","n","m","p1","n","m","p1","m","n"],
+    [10,8,10,14,10,11,12,13,10,12,13,10,13,9],
+    note="复购口径（10-12业务负责人定）：客户再次购买同一款才算复购。数据截至2026-10-12。")
 
 # 02 新老客占比（+建单价）
 nr = J["new_ratio_30d"]
@@ -111,29 +114,34 @@ sheet("新老客户占比(近30日)【需求5】",
     [12,12,10,14,10,12,12],
     note="建单价=金额÷购买单数（新客消费力）。")
 
-# 03 月未下单（新口径：近3月有单、本月无单；+手机号）
-rows = [[r["name"], r["phone"] or "—", r["vip"], r["last"], r["gapDays"], r["buyN"], r["retN"], r["buyAmt"], r["aov"]] for r in J["month_missing"]]
+# 03 月未下单（新口径：近3月有单、本月无单；+手机号+归属店铺）
+rows = [[r["name"], r["phone"] or "—", r.get("shop") or "—", r["vip"], r["last"], r["gapDays"], r["buyN"], r["retN"], r["buyAmt"], r["aov"]] for r in J["month_missing"]]
 sheet("客户月未下单名单【需求3附】",
-    ["客户","手机号","等级","最后下单","距今天数","累计下单数","退单数","累计回款(¥)","客单价(¥)"],
-    rows, ["t","t","t","d","n","n","n","m","m"],
-    [20,15,8,12,10,11,8,13,11],
+    ["客户","手机号","归属店铺","等级","最后下单","距今天数","累计下单数","退单数","累计回款(¥)","客单价(¥)"],
+    rows, ["t","t","t","t","d","n","n","n","m","m"],
+    [20,15,20,8,12,10,11,8,13,11],
     note="口径（10-12改）：近3个月有下单、但本月（自然月）还没下单——正常客户每月都应有单，本月没单即需跟进。⚠️含疑似内部账户待剔除确认。")
 
-# 04 导购
-rows = [[s["seller"],s["times"],s["qty"],s["amt"],s["newBuyN"],s["newAmt"],s["oldBuyN"],s["oldAmt"],s["reorderAmt"],s["oldBuyN"]/max(1,s["newBuyN"]+s["oldBuyN"])] for s in J["seller_30d"]]
-sheet("导购日周月销售【需求4】",
-    ["导购","单数(30日)","件数","回款额(¥)","新客购买单数","新客金额(¥)","老客购买单数","老客金额(¥)","补单金额(¥)","老客占比"],
-    rows, ["t","n","n","m","n","m","n","m","m","pct"],
-    [12,10,10,13,12,13,12,13,13,9],
-    note="「空」=未指定导购。")
+# 04 导购（10-12改：按日/周/月三周期 × 店铺分开）
+SW = J.get("seller_windows", {})
+for key, lb, note_extra in [
+    ("seller_daily", "导购业绩·昨日", f'统计窗口：{SW.get("daily","")}（每日晨发昨日数据）'),
+    ("seller_weekly", "导购业绩·上周", f'统计窗口：{SW.get("weekly","")}（周一晨发上周数据）'),
+    ("seller_monthly", "导购业绩·本月截至昨日", f'统计窗口：{SW.get("monthly","")}（每日发当月1日至昨日）')]:
+    rows = [[a["shop"], a["seller"], a["times"], a["qty"], a["amt"], a["newBuyN"], a["newAmt"], a["oldBuyN"], a["oldAmt"], a.get("repAmt",0), a.get("repBuyN",0), a["oldBuyN"]/max(1,a["newBuyN"]+a["oldBuyN"])] for a in J.get(key, [])]
+    sheet(f"{lb}【需求4】",
+        ["店铺","导购","单数","件数","回款额(¥)","新客购买单数","新客金额(¥)","老客购买单数","老客金额(¥)","复购金额(¥)","复购单数","老客占比"],
+        rows, ["t","t","n","n","m","n","m","n","m","m","n","pct"],
+        [20,10,8,10,13,12,13,12,13,13,9,9],
+        note=note_extra + "；按店铺分开；复购=客户再次购买同一款；「未指定」=无导购的单。")
 
 # 05 新客未复购（新档位15-30/30-60 + 件单价建单价 + 手机号）
-nc = [["15-30天档", r["name"], r["phone"] or "—", r["first"], r["gapDays"], r["amt"], r["qty"], r["aov"], r["unitPrice"]] for r in J["new_client_15_30"]] + \
-     [["30-60天档", r["name"], r["phone"] or "—", r["first"], r["gapDays"], r["amt"], r["qty"], r["aov"], r["unitPrice"]] for r in J["new_client_30_60"]]
+nc = [["15-30天档", r["name"], r["phone"] or "—", r.get("shop") or "—", r["first"], r["gapDays"], r["amt"], r["qty"], r["aov"], r["unitPrice"]] for r in J["new_client_15_30"]] + \
+     [["30-60天档", r["name"], r["phone"] or "—", r.get("shop") or "—", r["first"], r["gapDays"], r["amt"], r["qty"], r["aov"], r["unitPrice"]] for r in J["new_client_30_60"]]
 sheet("新客未复购名单【需求6】",
-    ["档位","客户","手机号","首单日","距首单(天)","首单金额(¥)","首单件数","建单价(¥)","件单价(¥)"],
-    nc, ["t","t","t","d","n","m","n","m","p1"],
-    [12,20,15,12,11,12,10,11,10],
+    ["档位","客户","手机号","归属店铺","首单日","距首单(天)","首单金额(¥)","首单件数","建单价(¥)","件单价(¥)"],
+    nc, ["t","t","t","t","d","n","m","n","m","p1"],
+    [12,20,15,20,12,11,12,10,11,10],
     note="档位（10-12改）：首单后15-30天未复购 / 30-60天未复购；60天以上不管。")
 
 # 06 ABCD
@@ -145,21 +153,22 @@ sheet("ABCD类客户下单回款【需求8】",
     note="等级取多客系统vip字段；B/A/C对应暂标待确认。")
 
 # 07-09 补单款TOP（款式版，周/半月/月）
-for key, lb in [("reorder_goods_week","补单款TOP30·近7日"),("reorder_goods_halfmonth","补单款TOP30·近半月"),("reorder_goods_month","补单款TOP30·近30日")]:
-    rows = [[g["ref"], g["name"], g["cat"], g["listDate"], g["price"], g["qty"], g["amt"], g["clients"]] for g in J[key]]
+for key, lb in [("repurchase_goods_week","复购款TOP30·近7日"),("repurchase_goods_halfmonth","复购款TOP30·近半月"),("repurchase_goods_month","复购款TOP30·近30日")]:
+    arr = J.get(key, J.get(key.replace("repurchase","reorder"), []))
+    rows = [[g["ref"], g["name"], g["cat"], g["listDate"], g["price"], g["qty"], g["amt"], g["clients"]] for g in arr]
     sheet(f"{lb}【需求2】",
-        ["款号","款名","品类","上市时间","价格(¥)","补单量","补单金额(¥)","补单客户数"],
+        ["款号","款名","品类","上市时间","价格(¥)","复购量","复购金额(¥)","复购客户数"],
         rows, ["t","t","t","d","m","n","m","n"],
         [15,22,10,12,9,10,13,11],
         img_col=2, img_key=0,
-        note="补单款（10-12改）：老客再拿该款的量/金额（客户行为口径；系统单据无字面「补单」标记，按客户非首单判定）。" if key.endswith("month") else None)
+        note="复购口径（10-12业务负责人定）：客户再次购买同一款才算复购（首购不计）。" if key.endswith("month") else None)
 
 # 10 新客户月度（自然月 + 手机号）
-rows = [[r["name"], r.get("phone") or "—", r["first"], r["times"], r["qty"], r["amt"], r["aov"], r["unitPrice"]] for r in J["new_client_monthly"]]
+rows = [[r["name"], r.get("phone") or "—", r.get("shop") or "—", r["first"], r["times"], r["qty"], r["amt"], r["aov"], r["unitPrice"]] for r in J["new_client_monthly"]]
 sheet("新客户月销售分析【需求7】",
-    ["客户","手机号","首单时间","月内下单次数","件数","回款(¥)","客单价(¥)","件单价(¥)"],
-    rows, ["t","t","d","n","n","m","m","p1"],
-    [18,15,12,12,9,12,11,10],
+    ["客户","手机号","归属店铺","首单时间","月内下单次数","件数","回款(¥)","客单价(¥)","件单价(¥)"],
+    rows, ["t","t","t","d","n","n","m","m","p1"],
+    [18,15,20,12,12,9,12,11,10],
     note="口径（10-12确认）：自然月内首次消费且当月≥2单的新客。")
 
 # 11-16 动销（周/半月/月 × 全量/剔除专属≥2客户）
@@ -208,20 +217,20 @@ sheet("售罄率排行【需求11】",
 for tier in ["上市1-7天","上市7-15天","上市15-30天"]:
     arr = [p for p in J["new_product"] if p.get("tier") == tier]
     if not arr: continue
-    rows = [[p["ref"], p["name"], p["cat"], p["listDate"], p["price"], p["weekQty"], p["weekClients"], p["qty"], p["amt"], p["clients"]] for p in arr]
+    rows = [[p["ref"], p["name"], p["cat"], p["listDate"], p["price"], p["weekQty"], p["weekClients"], p["qty"], p["amt"], p["clients"], p.get("stock","—")] for p in arr]
     sheet(f"新品上市·{tier}【需求1】"[:31],
-        ["款号","款名","品类","上市日","价格(¥)","首周销量","首周客户数","累计销量","累计金额(¥)","累计客户数"],
-        rows, ["t","t","t","d","m","n","n","n","m","n"],
-        [15,22,10,12,9,10,11,10,13,11],
+        ["款号","款名","品类","上市日","价格(¥)","首周销量","首周客户数","累计销量","累计金额(¥)","累计客户数","实时库存"],
+        rows, ["t","t","t","d","m","n","n","n","m","n","t"],
+        [15,22,10,12,9,10,11,10,13,11,10],
         img_col=2, img_key=0,
         note="档位按上市时间（多客建档日）到生成日：1-7/7-15/15-30天（10-12改，翻单决策用）。")
 
 # 20 新品客户数TOP10（+档位+价格）
-rows = [[p.get("tier",""), p["ref"], p["name"], p["cat"], p["listDate"], p.get("price") or 0, p["clients"], p["qty"], p["amt"]] for p in J["new_product_client_top"]]
+rows = [[p.get("tier",""), p["ref"], p["name"], p["cat"], p["listDate"], p.get("price") or 0, p["clients"], p["qty"], p["amt"], p.get("stock","—")] for p in J["new_product_client_top"]]
 sheet("新品累计客户数TOP10【需求1】",
-    ["上市档位","款号","款名","品类","上市日","价格(¥)","累计客户数","累计销量","累计金额(¥)"],
-    rows, ["t","t","t","t","d","m","n","n","m"],
-    [12,15,22,10,12,9,11,10,13],
+    ["上市档位","款号","款名","品类","上市日","价格(¥)","累计客户数","累计销量","累计金额(¥)","实时库存"],
+    rows, ["t","t","t","t","d","m","n","n","m","t"],
+    [12,15,22,10,12,9,11,10,13,10],
     img_col=3, img_key=1,
     note="普及面对照150家标准；档位=上市1-7/7-15/15-30天。")
 
@@ -244,25 +253,83 @@ sheet("库存告急款【需求9附】",
     note="告急定义（10-12改）：总库存<近7日销量×2（卖不过两周即告急）。按可售周数升序=最紧急在前。")
 
 # 23 老客盘活（+手机号）
-rows = [[r["name"], r.get("phone") or "—", r["vip"], r["first"], r["last"], r["gapDays"], r["buyN"], r["retN"], r["netQty"], r["netAmt"], r["aov"], r["unitPrice"]] for r in J["revive_90up"]]
+rows = [[r["name"], r.get("phone") or "—", r.get("shop") or "—", r["vip"], r["first"], r["last"], r["gapDays"], r["buyN"], r["retN"], r["netQty"], r["netAmt"], r["aov"], r["unitPrice"]] for r in J["revive_90up"]]
 sheet("老客盘活名单【需求10】",
-    ["客户","手机号","等级","首单时间","最后下单","间隔(天)","下单数","退单数","净件数","净额(¥)","客单价(¥)","件单价(¥)"],
-    rows, ["t","t","t","d","d","n","n","n","n","m","m","p1"],
-    [20,15,8,12,12,9,8,8,10,13,11,10],
+    ["客户","手机号","归属店铺","等级","首单时间","最后下单","间隔(天)","下单数","退单数","净件数","净额(¥)","客单价(¥)","件单价(¥)"],
+    rows, ["t","t","t","t","d","d","n","n","n","n","m","m","p1"],
+    [20,15,20,8,12,12,9,8,8,10,13,11,10],
     note="超3个月~2年未下单，按历史净额降序；手机号缺失约两成（档案无号），显示—。")
 
 # 24 流失三档（+手机号）
 rows = []
 for tier, arr in [("30-60天", J["dormant_30_60"]), ("60天-1年", J["dormant_60_365"]), ("1-2年", J["dormant_365_730"])]:
     for r in arr:
-        rows.append([tier, r["name"], r.get("phone") or "—", r["vip"], r["last"], r["gapDays"], r["buyN"], r["retN"], r["buyQty"], r["retQty"], r["buyAmt"], r["retAmt"], r["aov"], r["unitPrice"]])
+        rows.append([tier, r["name"], r.get("phone") or "—", r.get("shop") or "—", r["vip"], r["last"], r["gapDays"], r["buyN"], r["retN"], r["buyQty"], r["retQty"], r["buyAmt"], r["retAmt"], r["aov"], r["unitPrice"]])
 sheet("客户流失预警三档【需求10】",
-    ["档位","客户","手机号","等级","最后下单","间隔(天)","下单数","退单数","购买件数","退货件数","购买金额(¥)","退货金额(¥)","客单价(¥)","件单价(¥)"],
-    rows, ["t","t","t","t","d","n","n","n","n","n","m","m","m","p1"],
-    [12,20,15,8,12,9,8,8,10,10,13,13,11,10],
+    ["档位","客户","手机号","归属店铺","等级","最后下单","间隔(天)","下单数","退单数","购买件数","退货件数","购买金额(¥)","退货金额(¥)","客单价(¥)","件单价(¥)"],
+    rows, ["t","t","t","t","t","d","n","n","n","n","n","m","m","m","p1"],
+    [12,20,15,20,8,12,9,8,8,10,10,13,13,11,10],
     note="三档全量；超2年已剔除；含疑似内部账户待业务负责人确认剔除。")
 
-wb.properties.title = "销售数据报表 2026-10-12（V2.1 改动需求落实版）"
+# ===== 00 口径说明总表（插到最前） =====
+CALIBER = [
+    ["一、客户口径", "", ""],
+    ["客户账户合并", "同人多个账户归并为一户（同名+同手机号并查集）；客户数、新老客、流失名单均按合并后口径", "合并明细见《客户账户合并审计表》；发现误合并（同名不同人）可拆开重算"],
+    ["新客", "近30日窗口内首次出现且3年历史无下单记录的客户（首次建档并下单）", "月内补货仍算新客"],
+    ["老客", "非首次下单的客户", ""],
+    ["客户归属店铺", "该客户历史下单次数最多的店铺", "跨店客户按主店铺归属"],
+    ["手机号", "取合并组内任一账户的手机号；档案无号显示—", "约78%客户有手机号"],
+    ["二、交易口径", "", ""],
+    ["购买单数/建单价", "购买单数=件数>0的订单数；建单价=购买金额÷购买单数", "退单不计入建单价分母"],
+    ["连带(件/单)", "件数÷购买单数（含退货冲减）", ""],
+    ["复购（原补单）", "客户再次购买同一款才算复购（按客户×款时间序，第2次起算）", "2026-10-12业务负责人定稿口径"],
+    ["退货", "负数数量订单自然冲减金额/件数", ""],
+    ["三、名单口径", "", ""],
+    ["客户月未下单", "近3个月有下单、但本月（自然月）还没下单的客户", "正常客户每月都应有单；每日推业务跟进"],
+    ["新客未复购", "首单后15-30天档 / 30-60天档未下第二单", "60天以上不管"],
+    ["客户流失预警三档", "最后下单距今 30-60天 / 60天-1年 / 1-2年", "超2年已剔除；按购买金额降序"],
+    ["老客盘活名单", "超3个月~2年未下单，按历史净回款降序", "用于分级邀约"],
+    ["四、单品口径", "", ""],
+    ["上市时间（三级）", "①商品备注中的日期（多客编辑页备注，如9.21）→ ②无备注用首次销售时间 → ③兜底商品建档日", "备注由 fetch-goods-remarks 每日增量拉取"],
+    ["单品价格", "多客商品销售价（price_range 第一档）", ""],
+    ["动销TOP30", "近7日/半月/30日三窗口，全品类按销量排", "另有「剔除专属」版=下单客户数≥2（≥5版待业务负责人拍板）"],
+    ["售罄率", "近30日销量÷衣者当前库存", "会议口径分母应为累计总进货数，待系统方加字段后切换；>100%=预售/补单在途"],
+    ["新品上市三档", "上市1-7天 / 7-15天 / 15-30天", "档位按上市时间（三级口径）到生成日计算"],
+    ["五、库存口径", "", ""],
+    ["统计范围", "仅当年当季（多客 年份=2026年 & 季节=冬季）", "配置：config/sales-params.json"],
+    ["库存告急", "总库存 < 近7日销量×2（卖不过两周即告急）", "2026-10-12业务负责人定稿公式"],
+    ["预估周转(周)", "库存÷近7日销量（∞=近7日无销量）", ""],
+    ["实时库存负数", "负库存=预售欠货（多客先行销售，业务正常现象）", ""],
+    ["六、导购口径", "", ""],
+    ["导购业绩三张", "昨日（每日晨发）/ 上周（周一晨发，上周一至周日）/ 本月截至昨日", "全部按店铺分开；「未指定」=无导购的单"],
+    ["七、其他", "", ""],
+    ["数据源", "多客3年销售订单全量+明细（5万+单）、客户档案、实时库存、衣者当前库存", "数据截至报表生成当日"],
+    ["待拍板项", "①专属客户剔除门槛≥2还是≥5 ②内部账户剔除清单（内部户A/清货/版衣特卖等疑似内部户仍在名单） ③ABCD与vip对应 ④多客总进货数字段", "确认后改 config/sales-params.json 即生效"],
+]
+ws0 = wb.create_sheet("00·口径说明", 0)
+ws0.sheet_properties.tabColor = "2F5597"
+ws0.cell(1, 1, "销售数据报表·口径说明总表（V2.4）").font = ft
+ws0.merge_cells(start_row=1, start_column=1, end_row=1, end_column=3)
+ws0.cell(1, 1).alignment = al
+hdrs = ["条目", "口径定义", "备注"]
+for c, h in enumerate(hdrs, 1):
+    cell = ws0.cell(2, c, h)
+    cell.font = fh; cell.fill = fl; cell.alignment = ac; cell.border = bd
+for i, row in enumerate(CALIBER):
+    r = 3 + i
+    is_section = row[1] == "" and row[2] == ""
+    for c, v in enumerate(row, 1):
+        cell = ws0.cell(r, c, v)
+        cell.font = fh if is_section else fb
+        if is_section:
+            cell.fill = PatternFill("solid", fgColor="D9E2F3")
+        cell.alignment = al if c > 1 else ac
+        cell.border = bd
+for c, w in enumerate([22, 72, 52], 1):
+    ws0.column_dimensions[get_column_letter(c)].width = w
+ws0.freeze_panes = "A3"
+
+wb.properties.title = "销售数据报表 2026-10-12（V2.4 复购口径+备注上市时间）"
 wb.save(OUT)
 imgs = sum(len(ws._images) for ws in wb.worksheets)
 print("saved:", OUT, "| sheets:", len(wb.sheetnames), "| images:", imgs)

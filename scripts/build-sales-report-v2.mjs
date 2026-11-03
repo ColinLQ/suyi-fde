@@ -61,9 +61,11 @@ valid.forEach(o => {
   const amt = +o.calc_price || 0, qty = +o.goods_quantity || 0, t = +o.ctime;
   const isRet = qty < 0;
   let a = custAgg.get(gid);
-  if (!a) { a = { first: t, last: t, buyN: 0, retN: 0, buyQty: 0, retQty: 0, buyAmt: 0, retAmt: 0, cids: new Set() }; custAgg.set(gid, a); }
+  if (!a) { a = { first: t, last: t, buyN: 0, retN: 0, buyQty: 0, retQty: 0, buyAmt: 0, retAmt: 0, cids: new Set(), shops: new Map() }; custAgg.set(gid, a); }
   a.first = Math.min(a.first, t); a.last = Math.max(a.last, t);
   a.cids.add(cid);
+  const sn = o.shop_name || '未知店';
+  a.shops.set(sn, (a.shops.get(sn) || 0) + 1); // 归属店铺=下单次数最多
   if (isRet) { a.retN++; a.retQty += Math.abs(qty); a.retAmt += Math.abs(amt); }
   else { a.buyN++; a.buyQty += qty; a.buyAmt += amt; }
 });
@@ -87,12 +89,18 @@ const phoneOf = gid => {
   for (const id of g.ids) { const p = custPhone.get(String(id)); if (p) return p; }
   return '';
 };
-// 单品销售价 + 上市时间（2026-10-12 需求#7：所有单品表加上市时间/价格）
-const goodsPrice = new Map(); const goodsListDate = new Map();
+// 客户归属店铺（2026-10-12：所有客户统计表加归属店铺）
+const shopOf = gid => { const a = custAgg.get(gid); if (!a || !a.shops.size) return ''; let best = '', n = 0; a.shops.forEach((c, sn) => { if (c > n) { n = c; best = sn; } }); return best; };
+// 单品销售价 + 上市时间（V2.4 口径：多客备注日期优先 → 无备注用首次销售时间 → 兜底建档日）
+const goodsPrice = new Map(); const goodsListDate = new Map(); const goodsRemarkDate = new Map();
+let REMARKS = {};
+try { REMARKS = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/goods-remarks.json'), 'utf8')); } catch {}
 goods.forEach(g => {
   const pr = g.price_range && g.price_range.range && g.price_range.range[0] ? +g.price_range.range[0] : 0;
   if (pr > 0) goodsPrice.set(g.item_ref, pr);
-  goodsListDate.set(g.item_ref, beijing(+g.ctime));
+  const rem = REMARKS[g.item_ref];
+  if (rem && rem.date) { goodsListDate.set(g.item_ref, rem.date); goodsRemarkDate.set(g.item_ref, true); }
+  else goodsListDate.set(g.item_ref, beijing(+g.ctime)); // 先兜底建档日；首销时间在 rows 构建后回填
 });
 // 客单价 = 购买总金额 ÷ 购买单数；件单价 = 净额÷净件
 const aov = a => a.buyN > 0 ? a.buyAmt / a.buyN : 0;
@@ -100,11 +108,21 @@ const aov = a => a.buyN > 0 ? a.buyAmt / a.buyN : 0;
 // ---------- 明细行（款级事实表） ----------
 const rows = [];
 details.forEach(dd => (dd.goods || []).forEach(g => {
-  rows.push({ date: beijing(+g.ctime), ts: +g.ctime, cid: gidOf(g.client_id), seller: g.seller, shop_id: g.shop_id,
+  rows.push({ doc_id: g.doc_id, date: beijing(+g.ctime), ts: +g.ctime, cid: gidOf(g.client_id), seller: g.seller, shop_id: g.shop_id,
     ref: g.item_ref, name: g.name, cat: g.category, season: g.season, year: g.year,
     qty: g.quantity, price: g.price, amount: g.quantity * g.price });
 }));
 console.log('detail rows:', rows.length);
+
+// 上市时间回填：无备注日期的款 → 用首次销售时间（V2.4 口径）
+{
+  const firstSaleTs = new Map();
+  rows.forEach(r => { const cur = firstSaleTs.get(r.ref); if (!cur || r.ts < cur) firstSaleTs.set(r.ref, r.ts); });
+  goods.forEach(g => {
+    if (goodsRemarkDate.has(g.item_ref)) return;
+    if (firstSaleTs.has(g.item_ref)) goodsListDate.set(g.item_ref, beijing(firstSaleTs.get(g.item_ref)));
+  });
+}
 
 // ---------- 1&5. 周期统计（连带率/补单金额/新老客金额） ----------
 function periodStats(days) {
@@ -119,7 +137,7 @@ function periodStats(days) {
     const a = custAgg.get(gidOf(o.client_id));
     const isNew = a && a.first === +o.ctime; // 该客户全历史首单恰为本单
     if (isNew) { newBuyN += oQty > 0 ? 1 : 0; newAmt += oAmt; newQty += oQty; firstAmt += oAmt; }
-    else { oldBuyN += oQty > 0 ? 1 : 0; oldAmt += oAmt; oldQty += oQty; reorderAmt += oAmt; }
+    else { oldBuyN += oQty > 0 ? 1 : 0; oldAmt += oAmt; oldQty += oQty; reorderAmt += oAmt; } // reorderAmt=老客金额（兼容字段）
   });
   return {
     label: days, orders: os.length, amt, qty, buyN,
@@ -136,7 +154,7 @@ const p7 = periodStats(7), p15 = periodStats(15), p30 = periodStats(30);
 function dormantRec(a, cid) {
   const gap = Math.floor((NOW - a.last) / 86400);
   const netQty = a.buyQty - a.retQty, netAmt = a.buyAmt - a.retAmt;
-  return { cid, name: custName(cid), vip: vipOf(cid), first: beijing(a.first), last: beijing(a.last), gapDays: gap,
+  return { cid, name: custName(cid), phone: phoneOf(cid), shop: shopOf(cid), vip: vipOf(cid), first: beijing(a.first), last: beijing(a.last), gapDays: gap,
     buyN: a.buyN, retN: a.retN, buyQty: a.buyQty, retQty: a.retQty, buyAmt: a.buyAmt, retAmt: a.retAmt,
     netQty, netAmt, aov: aov(a), unitPrice: netQty > 0 ? netAmt / netQty : 0 };
 }
@@ -162,7 +180,7 @@ const monthMissing = [];
 custAgg.forEach((a, gid) => {
   if (a.last < threeMonthsAgo) return;      // 近3个月（90天）内没有任何单→不属于（那是流失名单的事）
   if (a.last >= monthStart) return;         // 本月已有单→正常
-  monthMissing.push({ name: custName(gid), phone: phoneOf(gid), vip: vipOf(gid), last: beijing(a.last), gapDays: Math.floor((NOW - a.last) / 86400),
+  monthMissing.push({ name: custName(gid), phone: phoneOf(gid), shop: shopOf(gid), vip: vipOf(gid), last: beijing(a.last), gapDays: Math.floor((NOW - a.last) / 86400),
     buyN: a.buyN, retN: a.retN, buyAmt: a.buyAmt, retAmt: a.retAmt, aov: aov(a) });
 });
 monthMissing.sort((x, y) => y.buyAmt - x.buyAmt);
@@ -172,7 +190,7 @@ const nc1530 = [], nc3060 = [];
 custAgg.forEach((a, gid) => {
   if (a.buyN + a.retN > 1) return;
   const ageDays = (NOW - a.first) / 86400;
-  const rec = { name: custName(gid), phone: phoneOf(gid), first: beijing(a.first), gapDays: Math.floor(ageDays), amt: a.buyAmt, qty: a.buyQty,
+  const rec = { name: custName(gid), phone: phoneOf(gid), shop: shopOf(gid), first: beijing(a.first), gapDays: Math.floor(ageDays), amt: a.buyAmt, qty: a.buyQty,
     aov: aov(a), unitPrice: a.buyQty > 0 ? a.buyAmt / a.buyQty : 0 };
   if (ageDays >= 15 && ageDays < 30) nc1530.push(rec);
   else if (ageDays >= 30 && ageDays < 60) nc3060.push(rec);
@@ -269,7 +287,7 @@ const newProduct = [];
     const listDate = beijing(ct);
     if ((NOW - ct) / 86400 > 35) return;
     const first7 = rows.filter(r => r.ref === ref && r.ts < ct + 7 * 86400);
-    newProduct.push({ ref, name: goodsName.get(ref) || '', cat: catOf(ref), listDate,
+    newProduct.push({ ref, name: goodsName.get(ref) || '', cat: catOf(ref), listDate, stock: dkStock.get(ref) ?? '-',
       weekQty: first7.reduce((s, r) => s + r.qty, 0), weekClients: new Set(first7.map(r => r.cid)).size,
       qty: x.qty, amt: x.amt, clients: x.clients.size, unitPrice: x.qty > 0 ? x.amt / x.qty : 0 });
   });
@@ -280,24 +298,60 @@ const newProdClientTop = [...newProduct].sort((a, b) => b.clients - a.clients).s
 const npTier = p => { const d = (NOW - (gctime.get(p.ref) || 0)) / 86400; return d < 7 ? '上市1-7天' : d < 15 ? '上市7-15天' : '上市15-30天'; };
 newProduct.forEach(p => { p.tier = npTier(p); p.price = goodsPrice.get(p.ref) || 0; });
 
-// ---------- 导购业绩（近30日：新老客金额、补单金额） ----------
-const sellerAgg = new Map();
-valid.filter(o => +o.ctime >= NOW - 30 * 86400).forEach(o => {
-  const s = o.seller_name || '未指定';
-  let a = sellerAgg.get(s); if (!a) { a = { qty: 0, amt: 0, buyN: 0, newBuyN: 0, oldBuyN: 0, newAmt: 0, oldAmt: 0, reorderAmt: 0, times: 0 }; sellerAgg.set(s, a); }
-  const oAmt = +o.calc_price || 0, oQty = +o.goods_quantity || 0;
-  a.qty += oQty; a.amt += oAmt; a.times++; if (oQty > 0) a.buyN++;
-  const ca = custAgg.get(String(o.client_id));
-  if (ca && ca.first === +o.ctime) { a.newBuyN += oQty > 0 ? 1 : 0; a.newAmt += oAmt; }
-  else { a.oldBuyN += oQty > 0 ? 1 : 0; a.oldAmt += oAmt; a.reorderAmt += oAmt; }
+
+// ---------- 导购业绩（2026-10-12改：按日/周/月三周期 × 店铺分开） ----------
+const sellerAgg = new Map(); // 30日汇总（兼容旧引用）
+const sellerDaily = new Map(), sellerWeekly = new Map(), sellerMonthly = new Map();
+const ymd = d => d.toISOString().slice(0, 10);
+const bjNow = new Date((NOW + 8 * 3600) * 1000);
+const bjYesterday = new Date(bjNow.getTime() - 86400 * 1000);
+const yStr = ymd(bjYesterday);
+const dow = (bjNow.getUTCDay() + 6) % 7 + 1;
+const lastMon = new Date(bjNow.getTime() - (dow + 6) * 86400 * 1000);
+const lastSun = new Date(lastMon.getTime() + 6 * 86400 * 1000);
+const mon1 = new Date(Date.UTC(bjNow.getUTCFullYear(), bjNow.getUTCMonth(), 1));
+const isoWeek = d => { const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const dayNum = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - dayNum + 3); const ft = new Date(Date.UTC(t.getUTCFullYear(), 0, 4)); const fd = (ft.getUTCDay() + 6) % 7; ft.setUTCDate(ft.getUTCDate() - fd + 3); return t.getUTCFullYear() + '-W' + String(1 + Math.round((t - ft) / (7 * 86400 * 1000))).padStart(2, '0'); };
+// ---------- 复购（V2.4 口径：客户再次购买同一款才算复购） ----------
+// 按明细行时间序：客户×款 首次出现=首购，其后=复购
+const custRefFirstTs = new Map(); // key: cid|ref -> first ts
+const sortedRows = [...rows].sort((a, b) => a.ts - b.ts);
+const repRows = sortedRows.map(r => {
+  const k = r.cid + '|' + r.ref;
+  const first = custRefFirstTs.get(k);
+  if (first === undefined) { custRefFirstTs.set(k, r.ts); return { ...r, isRep: false }; }
+  return { ...r, isRep: true };
 });
+
+// doc->复购金额/单行标记（由 repRows 明细推导；导购层 join）
+const docRepAmt = new Map();
+repRows.forEach(r => { if (!r.isRep) return; docRepAmt.set(String(r.doc_id), (docRepAmt.get(String(r.doc_id)) || 0) + r.amount); });
+function aggSeller(map, key, o, oAmt, oQty, isNew) {
+  let a = map.get(key);
+  if (!a) { a = { shop: o.shop_name || '未知店', seller: o.seller_name || '未指定', qty: 0, amt: 0, buyN: 0, newBuyN: 0, oldBuyN: 0, newAmt: 0, oldAmt: 0, reorderAmt: 0, repAmt: 0, repBuyN: 0, times: 0 }; map.set(key, a); }
+  a.qty += oQty; a.amt += oAmt; a.times++; if (oQty > 0) a.buyN++;
+  const dRep = docRepAmt.get(String(o.id)) || 0;
+  if (dRep > 0) { a.repAmt += dRep; a.repBuyN += oQty > 0 ? 1 : 0; }
+  if (isNew) { a.newBuyN += oQty > 0 ? 1 : 0; a.newAmt += oAmt; } else { a.oldBuyN += oQty > 0 ? 1 : 0; a.oldAmt += oAmt; a.reorderAmt += oAmt; }
+}
+valid.filter(o => +o.ctime >= (mon1.getTime() / 1000 - 8 * 3600 - 8 * 86400)).forEach(o => {
+  const oAmt = +o.calc_price || 0, oQty = +o.goods_quantity || 0;
+  const ca = custAgg.get(gidOf(o.client_id));
+  const isNew = !!(ca && ca.first === +o.ctime);
+  const dt = new Date((+o.ctime + 8 * 3600) * 1000);
+  const dStr = ymd(dt);
+  if (+o.ctime >= NOW - 30 * 86400) aggSeller(sellerAgg, o.seller_name || '未指定', o, oAmt, oQty, isNew);
+  if (dStr === yStr) aggSeller(sellerDaily, (o.shop_name || '未知店') + '|' + (o.seller_name || '未指定') + '|' + dStr, o, oAmt, oQty, isNew);
+  if (dStr >= ymd(lastMon) && dStr <= ymd(lastSun)) aggSeller(sellerWeekly, (o.shop_name || '未知店') + '|' + (o.seller_name || '未指定') + '|' + isoWeek(dt), o, oAmt, oQty, isNew);
+  if (dStr >= ymd(mon1) && dStr <= yStr) aggSeller(sellerMonthly, (o.shop_name || '未知店') + '|' + (o.seller_name || '未指定') + '|' + dStr.slice(0, 7), o, oAmt, oQty, isNew);
+});
+const sellerList = m => [...m.values()].sort((a, b) => a.shop.localeCompare(b.shop, 'zh') || b.amt - a.amt);
 
 // ---------- 新客户月度分析（首单时间/客单/件单价，剔除退单） ----------
 const monthNewRepeat = [];
 custAgg.forEach((a, cid) => {
   if (a.buyN < 2) return;
   if ((NOW - a.first) / 86400 > 30) return;
-  monthNewRepeat.push({ name: custName(cid), first: beijing(a.first), times: a.buyN, qty: a.buyQty, amt: a.buyAmt, aov: aov(a), unitPrice: a.buyQty > 0 ? a.buyAmt / a.buyQty : 0 });
+  monthNewRepeat.push({ name: custName(cid), phone: phoneOf(cid), shop: shopOf(cid), first: beijing(a.first), times: a.buyN, qty: a.buyQty, amt: a.buyAmt, aov: aov(a), unitPrice: a.buyQty > 0 ? a.buyAmt / a.buyQty : 0 });
 });
 monthNewRepeat.sort((x, y) => y.times - x.times || y.amt - x.amt);
 
@@ -328,6 +382,22 @@ function reorderGoodsBy(days) {
   return m;
 }
 const rgW = reorderGoodsBy(7), rgH = reorderGoodsBy(15), rgM = reorderGoodsBy(30);
+
+function repStatsBy(days) {
+  const cut = NOW - days * 86400;
+  let amt = 0, qty = 0, buyN = 0;
+  const seen = new Map(); // doc 去重（复购单数按订单算）
+  repRows.forEach(r => {
+    if (r.ts < cut || !r.isRep) return;
+    amt += r.amount; qty += r.qty;
+    if (!seen.has(r.doc_id || (r.cid + r.date))) { seen.set(r.doc_id || (r.cid + r.date), 1); buyN++; }
+  });
+  return { amt, qty, buyN };
+}
+const rep7 = repStatsBy(7), rep15 = repStatsBy(15), rep30 = repStatsBy(30);
+// 客户复购金额TOP（复购口径）
+const repCustAgg = new Map();
+repRows.forEach(r => { if (!r.isRep || r.ts < NOW - 30 * 86400) return; const k = r.cid; let a = repCustAgg.get(k); if (!a) { a = { amt: 0, qty: 0 }; repCustAgg.set(k, a); } a.amt += r.amount; a.qty += r.qty; });
 
 // ---------- 库存告急与积压（当年当季：year=2026年 season=冬季；周/月销量+周转） ----------
 const isCurrentSeason = ref => goodsYear.get(ref) === '2026年' && goodsSeason.get(ref) === '冬季';
@@ -469,14 +539,21 @@ const jsonOut = {
   sell_through_30d: sellThroughExport,
   new_product: newProduct, new_product_client_top: newProdClientTop.map(p => ({ ...p, tier: npTier(p), price: goodsPrice.get(p.ref) || 0 })),
   new_client_monthly: monthNewRepeat.map(r => ({ ...r, phone: phoneOf(custAgg.has(r.name) ? r.name : 'S' + r.name) || '' })),
-  seller_30d: [...sellerAgg.entries()].map(([s, a]) => ({ seller: s, ...a })),
+  seller_30d: [...sellerAgg.values()].map(a => ({ ...a })),
+  repurchase: { p7: rep7, p15: rep15, p30: rep30 },
+  repurchase_goods_week: [...(function(){ const m = new Map(); repRows.forEach(r => { if (r.ts < NOW - 7 * 86400 || !r.isRep) return; let g = m.get(r.ref); if (!g) { g = { ref: r.ref, qty: 0, amt: 0, clients: new Set() }; m.set(r.ref, g); } g.qty += r.qty; g.amt += r.amount; g.clients.add(r.cid); }); return [...m.values()].sort((a, b) => b.amt - a.amt).slice(0, 30).map(g => ({ ...g, clients: g.clients.size, name: goodsName.get(g.ref) || '', cat: catOf(g.ref), listDate: goodsListDate.get(g.ref) || '', price: goodsPrice.get(g.ref) || 0 })); })()],
+  repurchase_goods_halfmonth: [...(function(){ const m = new Map(); repRows.forEach(r => { if (r.ts < NOW - 15 * 86400 || !r.isRep) return; let g = m.get(r.ref); if (!g) { g = { ref: r.ref, qty: 0, amt: 0, clients: new Set() }; m.set(r.ref, g); } g.qty += r.qty; g.amt += r.amount; g.clients.add(r.cid); }); return [...m.values()].sort((a, b) => b.amt - a.amt).slice(0, 30).map(g => ({ ...g, clients: g.clients.size, name: goodsName.get(g.ref) || '', cat: catOf(g.ref), listDate: goodsListDate.get(g.ref) || '', price: goodsPrice.get(g.ref) || 0 })); })()],
+  repurchase_goods_month: [...(function(){ const m = new Map(); repRows.forEach(r => { if (r.ts < NOW - 30 * 86400 || !r.isRep) return; let g = m.get(r.ref); if (!g) { g = { ref: r.ref, qty: 0, amt: 0, clients: new Set() }; m.set(r.ref, g); } g.qty += r.qty; g.amt += r.amount; g.clients.add(r.cid); }); return [...m.values()].sort((a, b) => b.amt - a.amt).slice(0, 30).map(g => ({ ...g, clients: g.clients.size, name: goodsName.get(g.ref) || '', cat: catOf(g.ref), listDate: goodsListDate.get(g.ref) || '', price: goodsPrice.get(g.ref) || 0 })); })()],
+  seller_daily: sellerList(sellerDaily), seller_weekly: sellerList(sellerWeekly), seller_monthly: sellerList(sellerMonthly),
+  seller_windows: { daily: yStr, weekly: ymd(lastMon) + '~' + ymd(lastSun), monthly: ymd(mon1) + '~' + yStr },
   vip_30d: Object.fromEntries(vipStats),
   stock_max_current_season: stockMax.map(x => ({ ...x, cat: catOf(x.ref), listDate: goodsListDate.get(x.ref) || '', price: goodsPrice.get(x.ref) || 0 })),
   stock_warn_current_season: stockWarn.map(x => ({ ...x, cat: catOf(x.ref), listDate: goodsListDate.get(x.ref) || '', price: goodsPrice.get(x.ref) || 0 })),
   dormant_30_60: tierRows(tier1), dormant_60_365: tierRows(tier2), dormant_365_730: tierRows(tier3),
   revive_90up: revive.map(r => ({ ...r, phone: phoneOf(r.cid) || '' })),
 };
-fs.writeFileSync(path.join(OUT, '销售数据报告-2026-10-12.json'), JSON.stringify(jsonOut, null, 1));
-console.log('REPORT V2.1 json ->', '销售数据报告-2026-10-12.json');
+const TODAY = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+fs.writeFileSync(path.join(OUT, `销售数据报告-${TODAY}.json`), JSON.stringify(jsonOut, null, 1));
+console.log('REPORT json ->', `销售数据报告-${TODAY}.json`);
 console.log('REPORT V2 ->', path.join(OUT, '销售数据报告-2026-10-10.md'), `(${md.length} chars)`);
 console.log(`tiers: 30-60=${tier1.length} 60-365=${tier2.length} 365-730=${tier3.length} | revive=${revive.length} | newProd=${newProduct.length} | warn=${stockWarn.length}`);

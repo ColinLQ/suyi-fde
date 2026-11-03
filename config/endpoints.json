@@ -570,6 +570,44 @@
           "mobile"
         ],
         "note": "员工清单 [待实测:字段名]"
+      },
+      {
+        "page": "/sample-management/sample-details",
+        "api": "/common/template/get_template_detail",
+        "params": {},
+        "mode": "A",
+        "tier": "onetime",
+        "file": "yizhe_template_detail.json",
+        "note": "样板详情（V1.1会议新增：template_info含expected_new_date/actual_new_date/edition_number/season_name/remark废版原因）——按template_id逐款拉取，暂不进常规批次，由分析脚本按需调用"
+      },
+      {
+        "page": "/sample-management/sample-details",
+        "api": "/common/template_field/template_fields_config",
+        "params": {},
+        "mode": "A",
+        "tier": "onetime",
+        "file": "yizhe_template_fields_config.json",
+        "note": "样板资料字段配置（会议新增：确认款名/波段/季节/预计上新/实际上新/版次/备注系统字段全集，供填写规范文件对照）"
+      },
+      {
+        "page": "/sample-management/list",
+        "api": "/common/template/get_template_status_list",
+        "params": {
+          "page_size": 1000
+        },
+        "mode": "A",
+        "tier": "onetime",
+        "file": "yizhe_template_status_list.json",
+        "note": "样板状态清单（13环节 status_id 映射：1新开发/710面辅料齐/711已打板/712已车板/1764复版/713审版完成/714废版/717待下单/709面辅料已填/715用量已算/716制单完善/767确认可下单/7已下单）"
+      },
+      {
+        "page": "/sample-management/list",
+        "api": "/common/band/get_band_list",
+        "params": {},
+        "mode": "A",
+        "tier": "onetime",
+        "file": "yizhe_band_list.json",
+        "note": "波段清单（会议新增：2027春一波式规范波段核对用）"
       }
     ]
   },

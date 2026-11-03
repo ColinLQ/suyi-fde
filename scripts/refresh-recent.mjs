@@ -2,8 +2,21 @@
 // 增量刷新：近10日订单列表 + 新单明细，合并进 hist3y/details
 import fs from 'node:fs';
 import path from 'node:path';
-const SKILL = path.resolve(import.meta.dirname, '..');
-const RAW = path.join(SKILL, 'data/raw/2026-10-09/pm');
+const SKILL = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');  // skill根目录（可移植）
+// 3年订单明细基础库目录：data/raw 下含 duoke_order_details.jsonl 的最新目录（自动发现，可移植）
+const findBase = () => {
+  const hits = [];
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).forEach(e => {
+    const p = path.join(d, e.name);
+    if (e.isDirectory()) walk(p);
+    else if (e.name === 'duoke_order_details.jsonl') hits.push(path.dirname(p));
+  });
+  walk(path.join(SKILL, 'data/raw'));
+  if (!hits.length) throw new Error('未找到 duoke_order_details.jsonl 基础库，请先跑 fetch-sales-orders.mjs');
+  hits.sort((a, b) => fs.statSync(path.join(b, 'duoke_order_details.jsonl')).mtimeMs - fs.statSync(path.join(a, 'duoke_order_details.jsonl')).mtimeMs);
+  return hits[0];
+};
+const RAW = findBase();
 const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.creds.key;
 const BASE = 'https://api.duoke.net/index.php';
@@ -40,8 +53,10 @@ async function fetchDetail(id) {
   return null;
 }
 (async () => {
-  // 1) 刷新 2026-09-20 ~ 2026-10-10 窗口
-  const fresh = await fetchWindow('2026-09-20', '2026-10-10');
+  // 1) 刷新窗口：20天前 ~ 今天（动态，勿硬编码）
+  const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  const from = new Date(Date.now() + 8 * 3600 * 1000 - 20 * 86400 * 1000).toISOString().slice(0, 10);
+  const fresh = await fetchWindow(from, today);
   console.log('window rows:', fresh.length);
   const listF = path.join(RAW, 'duoke_orders_hist3y.jsonl');
   const existing = fs.readFileSync(listF, 'utf8').trim().split('\n').map(l => JSON.parse(l));

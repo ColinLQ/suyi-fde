@@ -140,7 +140,7 @@ goods.forEach(g => {
 });
 write('duoke_sale_trend.json', { days: 30, goods: trend });
 // 9) 销售单据（order/new_view_all）
-const clients = ['福建茉莉', '沈阳陈超', '杭州四季青小美', '武汉李姐', '北京动物园批发'];
+const clients = ['福建张三', '沈阳李四', '杭州王五', '武汉赵六', '北京钱七'];
 const orders = Array.from({ length: 25 }, (_, i) => {
   const isReturn = rnd() < 0.12;
   const qty = ri(10, 250);

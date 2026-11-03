@@ -246,6 +246,6 @@ L.push(`- 数据未补齐前：排序退化为"环节+新鲜度"；废版原因�
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 fs.writeFileSync(OUT, L.join('\n'));
 
-// 控制台摘要（供 notify/企微用）
+// 控制台摘要
 const summary = { date: today, total: rows.length, pool: Object.fromEntries(STEP_ORDER.map(s => [s, (pool[s] || []).length])), warns: warns.length, warnsHigh: warns.filter(w => w.lvl === '高').length, reviewReady: reviewCnt, reviewDone: reviewDone.length, scrapRate: +scrapRate.toFixed(1), missingName: missingName.length, missingBand: missingBand.length, out: path.relative(ROOT, OUT) };
 console.log(JSON.stringify(summary, null, 2));

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// report-daily.mjs — 生成经营日报(markdown+企微文本) + 看板H5。零网络（webhook推送单独由notify触发，Demo仅落盘预览）。
+// report-daily.mjs — 生成经营日报(markdown) + 五部门分版 + 看板H5。零网络，纯落盘产出（不负责推送）。
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -100,53 +100,6 @@ ${oversold.length ? `- ⛔ 超卖欠货：${oversold.length} 款库存为负（�
 const outDir = path.join(root, 'out'); fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, `日报-${date}.md`), md);
 
-// ============ 企微推送文本 ============
-const wecom = `【经营日报 ${date}】
-💰 销售(净) ${money(salesAmt - returnAmt)}｜${f(salesQty)}件/${sales.length}单
-🏭 在产 ${f(p.production_num)}单｜欠货 ${f(p.owed_num)}件｜异常 ${w.total_error}
-${oversold.length ? `⛔ 超卖欠货 ${oversold.length} 款（最优先）：${oversold.slice(0, 3).map(x => `${x.item_ref}缺口${f(Math.abs(x.stock))}件`).join('、')}\n` : ''}📦 补货预警 ${alerts.restock_alerts.length} 款（🔴紧急 ${urgent.length}）${urgent.filter(x => !x.level.includes('超卖')).slice(0, 3).map(x => `\n  ${x.level} ${x.item_ref} ${x.name}｜剩${x.days_left}天｜建议补${f(x.suggest_qty)}`).join('')}
-⚠️ 超期 ${alerts.overdue_orders.length} 单
-✅ 对账 ${recon.summary.quality_flag}
-——数据截至 ${(day.meta.captured_at || '').slice(11, 16)}${day.meta.source === 'mock' ? '（Demo模拟）' : ''}`;
-fs.writeFileSync(path.join(outDir, `日报-${date}-企微版.txt`), wecom);
-
-// ============ 企微全文版（无表格纯文本，聊天窗直接可读；2026-09-28用户反馈：md文件在企微无法直接查看） ============
-const payTotal = (day.duoke.payments || []).reduce((a, x) => a + Number(x.price), 0);
-const topShop = day.duoke.console.transaction_top10?.[0];
-const wecomFull = `【经营日报 ${date} 全文】
-
-一、今日速览
-▸ 销售(净) ${money(salesAmt - returnAmt)}｜${f(salesQty)}件/${sales.length}单（退货${returns.length}单 ${money(returnAmt)}）
-▸ 收款流水 ${money(payTotal)}
-▸ 30天门店Top ${topShop?.shop_name || '-'} ${money(topShop?.transaction_money)}
-
-二、生产进度（衣者）
-▸ 在产 ${f(p.production_num)} 单（首单${f(p.first_order)}/返单${f(p.back_order)}/订单${f(p.normal_order)}），下单 ${f(p.order_num)} 件
-▸ 裁货 ${f(p.cuted_num)} → 出货 ${f(p.stock_out_num)} → 入库 ${f(p.stock_in_num)}｜欠货 ${f(p.owed_num)} 件
-▸ 异常 ${w.total_error}（货期${w.date_error}/进度${w.time_error}/件数${w.num_error}）｜未分厂 ${w.no_factory_count}｜未指派采购 ${w.no_buyer_count}
-
-三、补货预警 ${alerts.restock_alerts.length} 款（⛔超卖${oversold.length}｜🔴紧急${alerts.restock_alerts.filter(x => x.level === '🔴紧急').length}｜🟡关注${alerts.restock_alerts.filter(x => x.level === '🟡关注').length}）
-${alerts.restock_alerts.map(x => `${x.level} ${x.item_ref} ${x.name}｜库存${f(x.stock)}｜日均${x.daily_avg}｜${x.days_left === '已超卖' ? '已超卖' : '剩' + x.days_left + '天'}｜建议补${f(x.suggest_qty)}`).join('\n')}
-
-四、超期红号 ${alerts.overdue_orders.length} 单（${Object.entries(alerts.overdue_summary).map(([k, v]) => `${k}${v}单`).join('、') || '无'}）
-${alerts.overdue_orders.slice(0, 5).map(o => `${o.template_no} ${o.type}｜${o.step}｜${o.over}｜${o.factory}｜跟单:${o.follower || '-'}`).join('\n')}
-
-五、品类结构（近7日动销Top10）
-${cateRows.slice(0, 10).map(([c, v]) => `${c}｜库存${f(v.stock)}件 ${money(v.value)}｜销${f(v.sold7)}`).join('\n')}
-
-六、销量Top10款
-${top10.map(([ref, g], i) => `${i + 1}. ${ref} ${g.name}｜销${f(g.sold7)}｜库存${f(g.stock)}`).join('\n')}
-
-七、销售业绩（流水归属）
-${Object.entries(bySeller).sort((a, b) => b[1] - a[1]).map(([n, v]) => `${n}：${money(v)}`).join('｜')}
-
-八、财务与数据质量
-▸ 待核对 ${money(fin.sum_wait_paid_price)}（衣者口径）
-▸ 成本对账：核对${recon.summary.cost_checked}款 超差${recon.summary.cost_violations}款 → ${recon.summary.quality_flag}
-▸ 款号匹配率 ${(mapping.pairs.length / (mapping.pairs.length + mapping.manual_queue.length) * 100).toFixed(1)}%（待人工确认 ${mapping.manual_queue.filter(q => q.status === '待确认').length} 款）${oversold.length ? `\n▸ ⛔ 超卖欠货 ${oversold.length} 款（库存为负=已接单未回货），累计缺口 ${f(oversold.reduce((a, x) => a + Math.abs(x.stock), 0))} 件` : ''}${alerts.stale_oversold?.length ? `\n▸ 🧊 呆滞超卖 ${alerts.stale_oversold.length} 款（30日零动销，缺口 ${f(alerts.stale_oversold.reduce((a, x) => a + x.gap, 0))} 件），建议盘点核销` : ''}
-▸ 数据截至 ${(day.meta.captured_at || '').replace('T', ' ').slice(0, 16)}（${srcDesc}${stockNote ? '；' + stockNote : ''}）`;
-fs.writeFileSync(path.join(outDir, `日报-${date}-企微全文版.txt`), wecomFull);
-
 // ============ 五部门分版（PRD US-01：研发/生产/销售/财务/仓库 各一份） ============
 const pendingQ = mapping.manual_queue.filter(q => q.status === '待确认');
 const deptReports = {
@@ -246,5 +199,4 @@ ${alerts.overdue_orders.slice(0, 8).map(o => `<tr><td>${o.template_no}</td><td>$
 </body></html>`;
 fs.writeFileSync(path.join(outDir, `看板-${date}.html`), html);
 
-console.log(`[report] 产出：out/日报-${date}.md ｜ out/日报-${date}-企微版.txt ｜ out/看板-${date}.html`);
-console.log(`[report] 企微预览：\n${wecom}`);
+console.log(`[report] 产出：out/日报-${date}.md ｜ 五部门分版txt ｜ out/看板-${date}.html`);

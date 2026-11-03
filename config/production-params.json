@@ -1,0 +1,10 @@
+{
+ "_说明": "生产监控日报可配置参数（2026-10-23 会议拍板）。删除本文件则用脚本内置默认值（与下面数值一致）。修改任一值需在值后加 _changed_by/_changed_at 字段留痕。",
+ "qty_threshold": 0.01,
+ "qty_exempt": 2,
+ "overdue_tolerance": 0,
+ "lead_days": 7,
+ "near_days": 2,
+ "fac_over_red": 5,
+ "material_surplus_min": 50
+}

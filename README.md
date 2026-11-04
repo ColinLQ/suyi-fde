@@ -1,11 +1,7 @@
 # scm-collector 使用说明（部署与操作手册）
 
 > 衣者 × 多客 数据采集与经营日报智能体技能
-> 版本 V1.0 ｜ 更新 2026-09-24
-
-> 📌 **开源版说明**：本仓库为**脱敏开源版**——已剔除全部真实业务数据、客户/人员/工厂信息与凭据；`state/`、`data/`、`out/` 为运行时目录（部署后自动生成），均不入库。文档中出现的数字均为示例。本 skill 只负责采集、计算与落盘产出，不做消息推送。
-
-> 🤖 **全新电脑一键部署**：把 [INSTALL.md](INSTALL.md) 直接投喂给任意 AI 智能体，即可按文档自动完成全部环境安装（Node/Python/Chrome）、技能放置、chrome-devtools MCP 配置与验收，含 Windows / macOS 双平台命令差异。
+> 版本 V1.0 ｜ 更新 2026-09-24 ｜ 配套文档：《PRD》《SOP》《技术方案》（见项目 docs/ 目录）
 
 ---
 
@@ -30,7 +26,6 @@
 | 款号映射 | 衣者款号 ↔ 多客货号自动匹配（全等→辅助→人工队列） | `state/mapping.json`、`out/款号核对清单-<日期>.md` |
 | 每日对账 | 成本口径（±1元，以多客为准）、入库一致性、匹配率 | `out/reconcile-<日期>.json`，异常进日报附注 |
 | 数据看板 | 当日经营看板（现场电脑浏览器打开） | `out/看板-<日期>.html` |
-| 生产监控日报 | 裁床↔出货比对（1%阈值/多出零容差）、货期逾期、工厂负荷、物料结存 | `out/生产监控日报-<日期>.xlsx`，5 sheet 三段式（汇总/明细/口径） |
 
 ## 三、环境要求
 
@@ -51,12 +46,9 @@
 
 ### 步骤 2：放置技能目录
 
-1. 获取本技能（二选一）：
-   - `git clone https://github.com/ColinLQ/suyi-fde.git scm-collector`
-   - 或下载 ZIP 后把文件夹改名为 `scm-collector`
-2. 把整个 `scm-collector` 文件夹复制到现场机，例如 `D:\scm-collector`
-3. 再复制一份到 WorkBuddy 的技能目录：`C:\Users\你的用户名\.workbuddy\skills\scm-collector\`（没有 `skills` 文件夹就新建一个；确切路径以所用 WorkBuddy 版本的说明为准）
-4. 验证链路（在 `D:\scm-collector` 这份上测，命令逐行执行）：
+1. 把整个 `scm-collector` 文件夹复制到现场机，例如 `D:\scm-collector`
+2. 再复制一份到 WorkBuddy 的技能目录：`C:\Users\你的用户名\.workbuddy\skills\scm-collector\`（没有 `skills` 文件夹就新建一个；确切路径以所用 WorkBuddy 版本的说明为准）
+3. 验证链路（在 `D:\scm-collector` 这份上测，命令逐行执行）：
    ```
    cd /d D:\scm-collector
    node scripts\mock-capture.mjs --slot am

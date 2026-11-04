@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 批量拉取商品备注（goods/get desc字段）→ state/goods-remarks.json
-// 上市时间口径（2026-10-12 业务负责人）：备注里的日期优先；无备注 → 首次销售时间
+// 上市时间口径（2026-10-12 柳红）：备注里的日期优先；无备注 → 首次销售时间
 import fs from 'node:fs';
 import path from 'node:path';
 

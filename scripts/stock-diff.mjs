@@ -107,7 +107,7 @@ const dkRefs = new Set(dkB.keys());
 const rows = [];
 const usedDk = new Set();
 for (const [no, y] of yzB) {
-  // 衣者款号常带后缀（客户名/套装/工厂标记，如 'LC263789—河南某客户'、'WT261397（套装）'），规范化后再比对
+  // 衣者款号常带后缀（客户名/套装/工厂标记，如 'LC263789—河南郭清清'、'WT261397（套装）'），规范化后再比对
   const base = no.split(/[-—(（/]/)[0].trim();
   let ref = dkRefs.has(no) ? no : (dkRefs.has(base) ? base : (dkRefs.has(tpl2ref[no]) ? tpl2ref[no] : null));
   const matched = !!ref;

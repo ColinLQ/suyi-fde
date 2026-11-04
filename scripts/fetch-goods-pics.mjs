@@ -11,7 +11,7 @@ const rl = f => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).ma
 const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.creds.key;
 const HDRS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36', 'Referer': 'https://air.duoke.net/', 'Origin': 'https://air-web.duoke.net', 'accept-language': 'chs' };
-const CDN = 'https://cn-cdn-oss.duoke.net/user_TENANT/'; // TODO: user_TENANT 替换为本租户ID（多客商品图URL中的 user_数字 段）
+const CDN = 'https://cn-cdn-oss.duoke.net/user_TENANT/'; // // TODO: user_TENANT 替换为本租户ID（多客商品图URL中的 user_数字 段）
 const THUMB = '?x-oss-process=image/resize,m_mfit,h_140,w_140/quality,q_80';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

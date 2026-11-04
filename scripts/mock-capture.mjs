@@ -61,7 +61,7 @@ write('yizhe_warn.json', {
 });
 // 3) 跟单进度（get_follow_order_list 核心字段）
 const steps = ['分配工厂', '物料采购', '物料到厂', '裁货', '出货', '入库'];
-const factories = ['工厂B', '工厂D', '工厂E', '工厂A', '工厂F'];
+const factories = ['恒生', '利兴', '鑫源', '博林丰', '展宏'];
 const followOrders = Array.from({ length: 30 }, (_, i) => {
   const over = rnd() < 0.3;
   return {
@@ -87,7 +87,7 @@ const fabricTypes = ['针织', '梭织'];
 const templates = Array.from({ length: 40 }, (_, i) => ({
   template_no: `SM26${String(41000 + i * 7).padStart(5, '0')}`,
   template_name: pick(['高领针织打底衫', '宽松羽绒马甲', '羊毛混纺连衣裙', '重磅纯棉T恤', '直筒休闲裤']),
-  cat_name: pick(cats), brand_name: '示例品牌', band_name: pick(['2026秋一波', '2026冬一波', '2026冬二波']),
+  cat_name: pick(cats), brand_name: '素一', band_name: pick(['2026秋一波', '2026冬一波', '2026冬二波']),
   design_user: pick(designers), template_price: String(f2(ri(35, 120))),
   fabric_type: pick(fabricTypes), template_status_name: pick(['已下单', '已下单', '待下单', '废版'])
 }));
@@ -100,8 +100,8 @@ write('duoke_console_summary.json', {
   today_doc_amount: '31', today_doc_money: '140330.50', today_doc_goods_amount: '1684', today_new_client_amount: '2',
   trade_trend: [{ date: '2026-08', transaction_sum: '2063', transaction_money: '1691327' }, { date: '2026-09', transaction_sum: '1980', transaction_money: '1520380' }],
   transaction_top10: [
-    { shop_id: '4', shop_name: '档口A（示例市场示例档号）', transaction_money: '819267.00' },
-    { shop_id: '1', shop_name: '档口B（示例市场示例档号）', transaction_money: '643192.00' },
+    { shop_id: '4', shop_name: '素一（十三行2918档）', transaction_money: '819267.00' },
+    { shop_id: '1', shop_name: '手山（十三行7楼D29-30A）', transaction_money: '643192.00' },
     { shop_id: '5', shop_name: '总仓', transaction_money: '57921.00' }
   ]
 });
@@ -146,7 +146,7 @@ const orders = Array.from({ length: 25 }, (_, i) => {
   const qty = ri(10, 250);
   return {
     number: String(1192600 + i), type: '1',
-    shop_name: pick(['档口A（示例市场示例档号）', '档口B（示例市场示例档号）']),
+    shop_name: pick(['素一（十三行2918档）', '手山（十三行7楼D29-30A）']),
     customer_name: pick(clients), seller_name: pick(['朱路琪', '何雪荧', '袁建均']),
     goods_quantity: isReturn ? -qty : qty, calc_price: String(f2((isReturn ? -1 : 1) * qty * ri(80, 150))),
     ctime: String(Math.floor(new Date(date).getTime() / 1000) - ri(0, 86400))

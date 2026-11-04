@@ -1,0 +1,121 @@
+{
+  "_comment": "2026-09成本核算专用：月窗口采集计划（2026-10-08生成）",
+  "yizhe": {
+    "endpoints": [
+      {
+        "page": "/finance-management/detail",
+        "api": "/backend/finance/get_finance_purchase_sum",
+        "params": {
+          "created_at": [
+            "2026-09-01",
+            "2026-09-30"
+          ],
+          "paid_status_list": [
+            1,
+            3
+          ]
+        },
+        "mode": "A",
+        "tier": "morning",
+        "file": "yizhe_finance_sum_sep.json",
+        "wait_text": [
+          "总金额"
+        ],
+        "fields": [
+          "sum_total_price",
+          "sum_wait_bill_price"
+        ],
+        "note": "财务待付汇总（模式A，轻；对齐页面默认近一年+待核对/部分核对）",
+        "_comment": "9月采购财务窗口"
+      }
+    ],
+    "base_page": "https://scm.yizheyun.com",
+    "base_api": "https://api.yizheyun.com",
+    "login_check": {
+      "page": "/sample-management/list",
+      "logged_in_marker": "员工"
+    }
+  },
+  "duoke": {
+    "endpoints": [
+      {
+        "page": "/finance/order",
+        "api": "/order/new_view_all",
+        "params": {
+          "bi_key": "documentList",
+          "type": "custom",
+          "sday": "2026-09-01",
+          "eday": "2026-09-30",
+          "order_type": "{\"options\":[\"sale_order\"],\"allSelected\":0}",
+          "keyword": ""
+        },
+        "mode": "A+B",
+        "tier": "increment",
+        "page_size": 20,
+        "file": "duoke_orders_sep.jsonl",
+        "list_path": "list",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "incremental": {
+          "param": "type=custom + sday/eday",
+          "morning_window": "昨日",
+          "evening_window": "当日"
+        },
+        "fields": [
+          "number",
+          "shop_name",
+          "calc_price",
+          "goods_quantity",
+          "customer_name",
+          "seller_name",
+          "ctime"
+        ],
+        "note": "销售单据（增量：早间昨日窗/晚间当日窗；历史回捞同参数扩窗口；退货=负数自然冲减）",
+        "_comment": "9月窗口重定向"
+      },
+      {
+        "page": "/finance/flow",
+        "api": "/payment/view_all",
+        "params": {
+          "bi_key": "billList",
+          "type": "custom",
+          "sday": "2026-09-01",
+          "eday": "2026-09-30",
+          "keyword": ""
+        },
+        "mode": "A+B",
+        "tier": "increment",
+        "page_size": 20,
+        "file": "duoke_payments_sep.jsonl",
+        "list_path": "list",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "incremental": {
+          "param": "type=custom + sday/eday",
+          "morning_window": "昨日",
+          "evening_window": "当日"
+        },
+        "fields": [
+          "price",
+          "payment_name",
+          "seller_name",
+          "client_name",
+          "ctime"
+        ],
+        "note": "收支流水（增量同上；响应list_num可对total）",
+        "no_version": true,
+        "_comment": "9月窗口重定向"
+      }
+    ],
+    "base_page": "https://air.duoke.net",
+    "base_api": "https://api.duoke.net/index.php",
+    "login_check": {
+      "page": "/",
+      "logged_in_marker": "概览"
+    }
+  }
+}

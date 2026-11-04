@@ -68,7 +68,7 @@ lastOf.forEach((t, g2) => { if ((NOW - t) / 86400 >= 30 && (NOW - t) / 86400 < 7
 console.log(`流失名单(30天-2年): ${dormantRaw} -> ${dormantMerged}（差 ${dormantRaw - dormantMerged}）`);
 
 // ---- 输出完整证据表 ----
-const lines = ['# 客户账户合并审计表（供业务负责人核对）', '',
+const lines = ['# 客户账户合并审计表（供柳红核对）', '',
   `构建时间：${new Date().toISOString()}`, `规则：A 归一化同名合并（去括号/空格/分隔符）+ B 同手机号合并；并查集聚类`,
   `有效下单客户 ${totalActiveRaw} 户（原始账户）→ 合并后 ${totalActiveMerged} 户；合并组 ${G.groups.length} 组（涉及 ${G.groups.reduce((s, g) => s + g.ids.length, 0)} 个账户）`, '',
   '> 用法：业务同事按此表核对。确认同人的保留合并；确认不同人的（如两个同名档口不同老板），告诉我组号，我将其拆开重算。', '',

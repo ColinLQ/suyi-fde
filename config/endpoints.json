@@ -80,7 +80,7 @@
           "design_user",
           "created_at"
         ],
-        "note": "成品库存(款级，晚间快照)。⚠️校验口径：UI total 含零库存已下单款，list 只含有库存款（实测=页数×每页条数+尾页余数），短页终止为准，total_relaxed=不按total对账"
+        "note": "成品库存(款级，晚间快照)。⚠️校验口径：UI total 含零库存已下单款，list 只含有库存款（实测1273款=12×100+73），短页终止为准，total_relaxed=不按total对账"
       },
       {
         "page": "/sample-management/list",
@@ -113,7 +113,7 @@
           "strategy": "created_since_last",
           "full_cadence": "weekly"
         },
-        "note": "样板列表（款号映射基础）：直连全量约10秒，晚间全采+周一兜底回捞"
+        "note": "样板列表 total≈2860（款号映射基础）：直连全量29页约10秒，晚间全采+周一兜底回捞"
       },
       {
         "page": "/documentary-management",
@@ -143,7 +143,7 @@
           "follower_user_name",
           "price"
         ],
-        "note": "跟单进度/返单次数/超期（在产单，午间/晚间全采，量小）"
+        "note": "跟单进度/返单次数/超期 157单（在产单，午间/晚间全采，量小）"
       },
       {
         "page": "/production-order",
@@ -178,7 +178,7 @@
           "follower_user_name",
           "created_at"
         ],
-        "note": "生产订单明细（在产单）"
+        "note": "生产订单明细 157单"
       },
       {
         "page": "/purchase-order/list",
@@ -222,7 +222,7 @@
           "factory_name",
           "plan_total_num"
         ],
-        "note": "采购状态/采购延期"
+        "note": "采购状态/采购延期36条"
       },
       {
         "page": "/documentary-management",
@@ -284,7 +284,7 @@
           "strategy": "created_since_last",
           "window_days": 7
         },
-        "note": "出货记录（注意status_list为int非数组；历史量大，日常只采近7日；created_at筛选参数[待实测]）"
+        "note": "出货记录（注意status_list为int非数组；历史共4389条，日常只采近7日；created_at筛选参数[待实测]）"
       },
       {
         "page": "/wear-in-stock",
@@ -341,7 +341,7 @@
           "total_price",
           "supply_name"
         ],
-        "note": "物料库存大列表——直连约30秒；可改 only_has_stock=1 减量或降周采"
+        "note": "物料库存 7475条≈75页——直连约30秒；可改 only_has_stock=1 减量或降周采"
       },
       {
         "page": "/finance-management/order",
@@ -521,7 +521,7 @@
           "follower_name",
           "last_order_time"
         ],
-        "note": "工厂清单"
+        "note": "工厂24家"
       },
       {
         "page": "/supplier-management",
@@ -548,7 +548,7 @@
           "supply_contact",
           "mobile"
         ],
-        "note": "供应商清单（仅周一）"
+        "note": "供应商812家（仅周一，直连9页）"
       },
       {
         "page": "/staff-management",
@@ -569,7 +569,7 @@
           "role_names",
           "mobile"
         ],
-        "note": "员工清单 [待实测:字段名]"
+        "note": "员工31人 [待实测:字段名]"
       },
       {
         "page": "/sample-management/sample-details",
@@ -690,7 +690,7 @@
           "sku.price_in",
           "sku.price_1"
         ],
-        "note": "商品+SKU库存(晚间快照核心)。@wide宽窗口保全量；无total字段，短页终止——历史库存回溯唯一途径 [待实测:宽窗口]",
+        "note": "商品+SKU库存(晚间快照核心)。@wide宽窗口保全量约450款≈23页；无total字段，短页终止——历史库存回溯唯一途径 [待实测:宽窗口]",
         "no_version": true,
         "_comment": "2026-09-28 实测：GET带version报9999 bi key not exist，同payment/view_all，置no_version（浏览器GET也不带version）"
       },

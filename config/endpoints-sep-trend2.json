@@ -1,0 +1,43 @@
+{
+  "_comment": "拼月动销",
+  "yizhe": {
+    "base_page": "https://scm.yizheyun.com",
+    "base_api": "https://api.yizheyun.com",
+    "login_check": {
+      "page": "/sample-management/list",
+      "logged_in_marker": "员工"
+    },
+    "endpoints": []
+  },
+  "duoke": {
+    "base_page": "https://air.duoke.net",
+    "base_api": "https://api.duoke.net/index.php",
+    "login_check": {
+      "page": "/",
+      "logged_in_marker": "概览"
+    },
+    "endpoints": [
+      {
+        "page": "/goods/list",
+        "api": "/analysis/get_goods_sale_trend",
+        "method": "POST",
+        "special": "sale_trend",
+        "params": {
+          "days": 30
+        },
+        "mode": "B",
+        "tier": "detail",
+        "file": "duoke_sale_trend_oct.json",
+        "wait_text": [
+          "共",
+          "暂无数据"
+        ],
+        "fields": [
+          "goods.{id}.trend",
+          "goods.{id}.total"
+        ],
+        "note": "单款30日动销(补货核心输入)。直连特例：读当日duoke_goods.jsonl的goods id按50个/批合并拉取"
+      }
+    ]
+  }
+}

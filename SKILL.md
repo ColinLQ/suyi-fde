@@ -121,9 +121,9 @@ python3 scripts/build-production-report.py --date <YYYY-MM-DD> [--slot am]
 
 **未纳入**（前置未满足，勿擅自"补齐"）：采购数↔裁床数（预裁数口径待管理层确认）、次品（多客次品仓接口待对接人确认）、损耗率（待客户方定标）、4天备货推送（缺在手量字段）。
 
-### 样衣管理日报（V1.0，2026-10-26 依据10-23设计部会议落地）★设计部链路
+### 样衣管理日报（V1.1，2026-11-04 固化 Excel 交付；依据设计部需求会议）★设计部链路
 
-触发词：**「样衣日报」/「样板管理」/「样衣进度」/「设计部日报」**。
+触发词：**「样衣日报」/「样板管理」/「样衣进度」/「设计部日报」**——用户要"日报"一律指 **Excel 版**（md 版为中间产物）。
 
 **口径（业务方拍板，改动须留痕）**：
 - 时间规则：新开发→面辅料齐 **1天** ｜ →已打板 **3天** ｜ →已车板 **3天** ｜ 已车板+复版攒 **20个即可提前审版**（周审兜底）｜ 审版完成→下单 **7天** ｜ 审版完成滞留 **14天必处理**
@@ -134,11 +134,13 @@ python3 scripts/build-production-report.py --date <YYYY-MM-DD> [--slot am]
 **执行链**（第0/1步登录校验通过后）：
 
 ```bash
-node scripts/fetch-endpoints.mjs --batch evening --only yizhe_template_list.jsonl   # ① 样板全量快照（全量约6页）
-node scripts/sample-pipeline-report.mjs --date <日期> [--prev-date <上期>]           # ② 日报 → out/样衣管理日报-<日期>.md
+node scripts/fetch-endpoints.mjs --batch evening --only yizhe_template_list.jsonl        # ① 样板全量快照（全量约6页）
+python3 scripts/build-sample-report-excel.py --date <日期> [--prev-date <上期>]           # ② Excel 日报 → out/样衣管理日报-<日期>.xlsx（终交付）
+node scripts/sample-pipeline-report.mjs --date <日期> [--prev-date <上期>]               # ③（可选）md 版 → out/样衣管理日报-<日期>.md
 ```
 
-产出六段：管线蓄水池（13环节件数）｜时间预警（1/3/3/7/14天规则）｜今日工作清单｜新品品类结构周报（按创建日期归周）｜数据完整性稽核（款名/波段缺失名单）｜环节流转环比。样板详情字段（expected_new_date/edition_number/remark等）已注册 `get_template_detail` onetime 端点，按 template_id 逐款调用（勿进常规批次）。
+**Excel 版结构**（build-sample-report-excel.py，依赖 python3+openpyxl，相对路径自解析可迁移）：`00总览`（今日快照结论+今天必做3件事）/`01管线蓄水池`（13环节+环比）/`02时间预警`（红黄级别）/`03今日工作清单`/`04品类结构`（周×品类+季累计）/`05数据稽核`（缺失名单，近30天黄底置顶）。每 sheet = 顶部总结 + 中部明细（筛选/冻结/条件格式）+ 底部口径说明。参数 SEASON_START（当季窗口起点）在脚本顶部，跨季调整。
+规则：会议需求实现台账（静态）不进日报 sheet。样板详情字段（expected_new_date/edition_number/remark等）已注册 `get_template_detail` onetime 端点，按 template_id 逐款调用（勿进常规批次）。
 
 ### 首单30天卖完统计（提成，V1.4 2026-10-22 定稿）★独立链路
 

@@ -20,6 +20,12 @@
 - **V1.1 2026-09-24（首轮实测后）**：新增「实测环境事实」（MCP落盘根=tmpdir、antd键盘导航改页、多客20条/页上限、翻页节奏与批量收割、校验三板斧、衣者库存total口径、导出按钮列入红线禁区）；批次重构提速——早间轻批次+昨日增量、晚间集中全量快照、午间可选；ingest.mjs修复缺失文件null崩溃（readJsonl兜底`||[]`）；CDP翻页收割器 capture-pages.mjs（仅DOM/Input/Network域、禁一切页内JS执行、失败回落MCP模式）
 - **V1.0 2026-09-24（初版）**：纯UI采集（禁代码注入）、早晚双快照分槽、批次分层tier（注册表对齐SOP采集清单21+9端点）、五部门分版日报、款号人工核对队列与回写、企微webhook推送、定时调度外置WorkBuddy定时任务、列表每页条数100、ingest通用兜底落库+Demo标记、state/data/out运行时自建
 
+## V2.3.1（2026-11-04 样衣日报 Excel 固化）
+- 新增 `scripts/build-sample-report-excel.py`：样衣管理日报固化为正式链路脚本——直接读 `data/raw/<日期>/<槽>/yizhe_template_list.jsonl` 派生全部明细（蓄水池/预警/今日清单/品类/稽核），不经中间文件；相对路径自解析（与 build-production-report.py 同迁移范式），`SEASON_START`（当季窗口起点）脚本顶部可调。
+- 产出 `out/样衣管理日报-<日期>.xlsx`（6 sheet：00总览/01管线蓄水池/02时间预警/03今日工作清单/04品类结构/05数据稽核，每 sheet=顶部总结+中部明细+底部口径说明，明细带筛选/冻结/条件格式）。
+- 设计原则（客户反馈沉淀）：**日报=每日增量数据**——静态内容（需求实现台账等）一律不进日报工作簿，需求原文单独存档。
+- SKILL.md：样衣管理日报节升 V1.1，执行链明确 Excel 为终交付、md 版为可选中间产物。
+
 ## V1.8（2026-10-10）
 - 新增销售报表链路（业务负责人14项需求）：refresh-recent增量刷单 → build-sales-report-v2 → build-sales-dashboard-v2
 - 新增客户账户合并（同人归并）：build-dedup-groups（同名+同手机号并查集）+ audit-client-counts 审计表；报表全指标按合并口径

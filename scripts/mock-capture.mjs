@@ -5,9 +5,12 @@
 // 后续 ingest/match/alert/reconcile/report 脚本链完全不变。
 // 红线：本文件不访问任何网络，仅生成本地文件。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -18,14 +21,14 @@ for (let i = 0; i < argv.length; i++) {
 }
 const date = args.date || new Date().toISOString().slice(0, 10);
 const slot = args.slot || (new Date().getHours() >= 14 ? 'pm' : 'am'); // 与 ingest.mjs 槽位口径一致
-let rawDir = path.join(root, 'data', 'raw', date, slot);
+let rawDir = path.join(dataHome, 'data', 'raw', date, slot);
 if (fs.existsSync(rawDir) && fs.readdirSync(rawDir).length > 0) {
   // 防污染护栏：槽位已有数据时隔离Demo产物（历史事故：am槽曾混入mock）
-  rawDir = path.join(root, 'data', 'raw', date, '_quarantine_mock');
+  rawDir = path.join(dataHome, 'data', 'raw', date, '_quarantine_mock');
   console.warn(`[mock-capture] ⚠️ ${date}/${slot} 槽已有数据，Demo产物改写入 _quarantine_mock/ 防污染`);
 }
 fs.mkdirSync(rawDir, { recursive: true });
-fs.mkdirSync(path.join(root, 'state'), { recursive: true });
+fs.mkdirSync(path.join(dataHome, 'state'), { recursive: true });
 fs.writeFileSync(path.join(rawDir, '_source_demo'), new Date().toISOString()); // Demo标记：ingest据此标注数据来源
 
 // —— 确定性伪随机（同日期可复现） ——

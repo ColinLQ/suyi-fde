@@ -10,9 +10,10 @@
 // 前置：Chrome 以 --remote-debugging-port=<port> 启动（与MCP同一浏览器）；第1页由智能体收割后调用本脚本续采2..N页
 // 输出：最后一行打印JSON摘要 {"ok":true,"pages":N,"rows":M,"reason":"..."} 供智能体核对；失败退出码1，智能体回落纯MCP逐页收割
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {

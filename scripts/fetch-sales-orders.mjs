@@ -4,10 +4,12 @@
 // 只读接口；凭据来自 state/auth.json（实时登录态收割缓存）
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
-const SKILL = path.resolve(import.meta.dirname, '..');
-const RAW = path.join(SKILL, 'data/raw/2026-10-09/pm');
-const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const RAW = path.join(dataHome, 'data/raw/2026-10-09/pm');
+const auth = JSON.parse(fs.readFileSync(path.join(dataHome, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.key || auth.duoke.creds?.key;
 if (!key) { console.error('no duoke key'); process.exit(1); }
 const BASE = 'https://api.duoke.net/index.php';

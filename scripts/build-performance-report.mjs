@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 // build-performance-report.mjs — 绩效分析与提成计算报告生成器。
-// 数据源：data/raw/<SNAP>/pm/perf_*.jsonl（fetch-performance-history.mjs 全量回捞）
-// 产出：out/performance-<MONTH>.json（供 build-perf-excel.py 生成 Excel 交付物）
-// 口径依据：绩效分析与提成计算需求文档-V1
+// 数据源：data/raw/2026-10-10/pm/perf_*.jsonl（fetch-performance-history.mjs 全量回捞）
+// 产出：out/performance-2026-09.json（供 build-perf-excel.py 生成 Excel 交付物）
+// 口径依据：绩效分析与提成计算需求文档-V1（2026-10-10）
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const MONTH = process.argv[2] || '2026-09';   // 统计月，可传入：node build-performance-report.mjs <YYYY-MM> <快照日>
-const SNAP = process.argv[3] || '2026-10-10'; // 数据快照日期（data/raw/<SNAP>/pm）
-const SRC = path.join(root, 'data', 'raw', SNAP, 'pm');
-const OUT = path.join(root, 'out');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const SRC = path.join(dataHome, 'data', 'raw', '2026-10-10', 'pm');
+const OUT = path.join(dataHome, 'out');
 fs.mkdirSync(OUT, { recursive: true });
+const MONTH = '2026-09'; // 统计月：9月（10月仍在进行中，不作完整月统计）
 
 const read = f => fs.readFileSync(path.join(SRC, f), 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 const stockout = read('perf_stockout_all.jsonl');       // 全量出货 4467
@@ -207,11 +209,11 @@ const summary = {
     预计出货时间填写率: `${productionDetail.filter(d => d.预计出货 !== '(未填)').length}/${productionDetail.length}`,
     主料到厂可解析率: `${productionDetail.filter(d => d.主料到厂 !== '(缺失)').length}/${productionDetail.length}`,
     多客入库时间: '多客系统无入库时间记录，仓库时效按衣者内部口径（出库→入库），多客对齐方案见需求文档V1',
-    统计范围: `出货${stockout.length}批/采购${purchase.length}单/完成跟单${followDone.length}/在产${followActive.length}/入库${instockDone.length}/样板${templates.length}（全量回捞快照 ${SNAP}）`,
+    统计范围: `出货${stockout.length}批/采购${purchase.length}单/完成跟单${followDone.length}/在产${followActive.length}/入库${instockDone.length}/样板${templates.length}（全量回捞 2026-10-10）`,
   },
 };
-fs.writeFileSync(path.join(OUT, `performance-${MONTH}.json`), JSON.stringify(summary, null, 1));
-console.log('[perf-report] JSON →', path.join(OUT, `performance-${MONTH}.json`));
+fs.writeFileSync(path.join(OUT, 'performance-2026-09.json'), JSON.stringify(summary, null, 1));
+console.log('[perf-report] JSON →', path.join(OUT, 'performance-2026-09.json'));
 console.log(JSON.stringify({
   采购员数: Object.keys(buyerStat).length, 跟单员数: Object.keys(followerStat).length,
   设计师数: Object.keys(designerStat).length, 仓库人数: Object.keys(warehouseStat).length,

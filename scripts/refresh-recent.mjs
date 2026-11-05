@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // 增量刷新：近10日订单列表 + 新单明细，合并进 hist3y/details
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-const SKILL = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');  // skill根目录（可移植）
+import os from 'node:os';
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 // 3年订单明细基础库目录：data/raw 下含 duoke_order_details.jsonl 的最新目录（自动发现，可移植）
 const findBase = () => {
   const hits = [];
@@ -11,13 +14,13 @@ const findBase = () => {
     if (e.isDirectory()) walk(p);
     else if (e.name === 'duoke_order_details.jsonl') hits.push(path.dirname(p));
   });
-  walk(path.join(SKILL, 'data/raw'));
+  walk(path.join(dataHome, 'data/raw'));
   if (!hits.length) throw new Error('未找到 duoke_order_details.jsonl 基础库，请先跑 fetch-sales-orders.mjs');
   hits.sort((a, b) => fs.statSync(path.join(b, 'duoke_order_details.jsonl')).mtimeMs - fs.statSync(path.join(a, 'duoke_order_details.jsonl')).mtimeMs);
   return hits[0];
 };
 const RAW = findBase();
-const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
+const auth = JSON.parse(fs.readFileSync(path.join(dataHome, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.creds.key;
 const BASE = 'https://api.duoke.net/index.php';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36';

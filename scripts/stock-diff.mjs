@@ -8,10 +8,13 @@
 //   款级匹配：款号完全一致优先 → 回落 state/mapping.json pairs（含人工确认对）
 // 产出：out/库存差异-<from>_<to>.md 与 .json
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -25,7 +28,7 @@ const readJsonl = f => fs.existsSync(f) ? fs.readFileSync(f, 'utf8').trim().spli
 const readJson = f => fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null;
 
 // —— 枚举所有含库存快照的日期/槽位 ——
-const rawRoot = path.join(root, 'data', 'raw');
+const rawRoot = path.join(dataHome, 'data', 'raw');
 const snaps = [];
 for (const d of fs.readdirSync(rawRoot).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x)).sort()) {
   for (const s of fs.readdirSync(path.join(rawRoot, d)).sort()) {
@@ -44,7 +47,7 @@ const pick = want => snaps.filter(x => x.date === want).sort((a, b) => (b.yz ? 1
 const A = pick(from), B = pick(to);
 if (!A || !B) { console.error(`[stock-diff] 缺少 ${from} 或 ${to} 的快照`); process.exit(1); }
 
-const mapping = JSON.parse(fs.readFileSync(path.join(root, 'state', 'mapping.json'), 'utf8'));
+const mapping = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'mapping.json'), 'utf8'));
 const tpl2ref = Object.fromEntries(mapping.pairs.map(p => [p.template_no, p.item_ref]));
 
 // —— 多客：按款聚合 SKU 库存 ——
@@ -227,7 +230,7 @@ if (dkA.size && dkB.size) {
 const dkDown = dkMovers.filter(r => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, TOP);
 const dkUp = dkMovers.filter(r => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, TOP);
 
-const outDir = path.join(root, 'out'); fs.mkdirSync(outDir, { recursive: true });
+const outDir = path.join(dataHome, 'out'); fs.mkdirSync(outDir, { recursive: true });
 const jsonPath = path.join(outDir, `库存差异-${from}_${to}.json`);
 fs.writeFileSync(jsonPath, JSON.stringify({ summary: tot, caliber, dk_series: dkSeries, rows, top_gap_yizhe: topGapYz, top_gap_duoke: topGapDk, drift, dead_stock: deadStock, unmatched, dk_down: dkDown, dk_up: dkUp }, null, 1));
 

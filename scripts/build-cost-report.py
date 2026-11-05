@@ -16,10 +16,12 @@ from pathlib import Path
 from collections import defaultdict, Counter
 from datetime import date
 
+import os
 ROOT = Path(__file__).resolve().parent.parent
+DATA_HOME = Path(os.environ.get('SCM_DATA_HOME') or (Path.home() / 'WorkBuddy' / 'scm-collector-data'))  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 MONTH = sys.argv[1] if len(sys.argv) > 1 else '2026-09'
 today = date.today().isoformat()
-RAW = ROOT / 'data' / 'raw' / today / 'pm'
+RAW = DATA_HOME / 'data' / 'raw' / today / 'pm'
 
 def num(s):
     if s is None: return None
@@ -174,7 +176,7 @@ out = {
         '范围说明': '按生产单下单时间落月（成本在下单时预估、采购/入库后转实际），与「采购汇总」的采购单创建月口径一致；与「生产跟单汇总」的出货月口径不同，两表不可直接相加对照',
     },
 }
-outp = ROOT / 'out' / f'cost-{MONTH}.json'
+outp = DATA_HOME / 'out' / f'cost-{MONTH}.json'
 outp.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding='utf-8')
 
 g = out['全局']

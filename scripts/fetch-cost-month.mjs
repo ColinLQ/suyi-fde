@@ -3,19 +3,22 @@
 // 用法：node scripts/fetch-cost-month.mjs [2026-09]
 // 只读查询；落盘 data/raw/<today>/pm/perf_cost_<month>.jsonl + perf_purchase_<month>.jsonl
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const month = process.argv[2] || '2026-09';
 const [y, m] = month.split('-').map(Number);
 const lastDay = new Date(y, m, 0).getDate();
 const start = `${month}-01`, end = `${month}-${String(lastDay).padStart(2, '0')}`;
 
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-const outDir = path.join(root, 'data', 'raw', today, 'pm');
+const outDir = path.join(dataHome, 'data', 'raw', today, 'pm');
 fs.mkdirSync(outDir, { recursive: true });
 
-const auth = JSON.parse(fs.readFileSync(path.join(root, 'state', 'auth.json'), 'utf8')).yizhe.creds;
+const auth = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'auth.json'), 'utf8')).yizhe.creds;
 const base = 'https://api.yizheyun.com';
 let nextFire = Date.now();
 async function call(api, params) {

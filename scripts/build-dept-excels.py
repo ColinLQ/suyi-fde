@@ -5,9 +5,7 @@
 # 生产: 超卖欠货 + 周滚动补货(净缺口/建议下单日/并单标记) + 在产驾驶舱 + 工厂计分卡
 # 销售: 流失预警 + 交期承诺 + 新客未复购 + 导购业绩 + 地域分布
 # 财务: 流水总览 + 对账 + 客户信用分档 + 库存资金
-import os, sys, glob
-import json
-from pathlib import Path
+import json, os, sys, glob
 from datetime import datetime, date
 
 try:
@@ -44,10 +42,11 @@ al_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
 al_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
 al_r = Alignment(horizontal="right", vertical="center")
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-RAW = f"{SKILL}/data/raw/2026-10-09/pm"
-RAW_T = f"{SKILL}/data/raw/2026-10-10/pm"
-OUTDIR = f"{SKILL}/out"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+RAW = f"{DATA_HOME}/data/raw/2026-10-09/pm"
+RAW_T = f"{DATA_HOME}/data/raw/2026-10-10/pm"
+OUTDIR = f"{DATA_HOME}/out"
 TODAY = "2026-10-10"
 
 

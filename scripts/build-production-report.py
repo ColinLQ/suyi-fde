@@ -28,6 +28,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill 根目录
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 
 # ============================================================
 # D5 可配置参数（会议拍板；修改需留痕到 out/param-changes.log）
@@ -59,7 +60,7 @@ def main():
     args = ap.parse_args()
     load_params()
 
-    base = os.path.join(ROOT, 'data', 'raw', args.date, args.slot)
+    base = os.path.join(DATA_HOME, 'data', 'raw', args.date, args.slot)
     def rp(name): return os.path.join(base, name)
     missing = [f for f in ('yizhe_production_list.jsonl','yizhe_cuted_records.jsonl','yizhe_material_store.jsonl') if not os.path.exists(rp(f))]
     if missing:
@@ -223,7 +224,7 @@ def main():
         ("时间口径","今日=%s；逾期=应完工日<今日 且 出货数<计划数；临期=剩余≤%d天。"%(args.date,NEAR)),
         ("规则来源","2026-10-23 生产需求会议（老板拍板参数），详见 references/生产监控口径.md。"),
         ("已开工口径","已开工=有裁床记录的生产单（%d/%d）；未开工单无比对基准，不进 D-1。"%(len(rows_qty),len(prod))),
-        ("未纳入模块","采购数↔裁床数（预裁数字段未回填完整，待老板确认口径）；次品（多客次品仓接口未接入，待阿军确认）；辅料损耗率（标准未定）。"),
+        ("未纳入模块","采购数↔裁床数（预裁数字段未回填完整，待老板确认口径）；次品（多客次品仓接口未接入，待生产对接人确认）；辅料损耗率（标准未定）。"),
     ],9)
 
     ws2=wb.create_sheet("①数量比对(裁床vs出货)"); ws2.sheet_view.showGridLines=False
@@ -319,11 +320,11 @@ def main():
         ("结存口径","结存=采购入库−生产领用（衣者物料库存 gap/total_gap_num）；负数=领用超采购，可能为：错账、损耗未录、或物料流失。"),
         ("可复用判定","material_type=1(主料) 且累计结存≥%d 单位；建议转设计端评估复用（老板：常年累积就是成本）。"%PARAMS["material_surplus_min"]),
         ("已知卡点(F4)","衣者物料库存『不勾对款号』，related_template_nos 大面积为空 → 负结存无法定位到具体款式，需采购侧补录规则后才能逐款追责。"),
-        ("辅料损耗率","正式阈值待华哥+采购定标后启用（建议方向：小五金2%/B料1%）。"),
+        ("辅料损耗率","正式阈值待生产经理+采购定标后启用（建议方向：小五金2%/B料1%）。"),
         ("统计","负结存 %d 条（按 gap<0 或 total_gap_num<0 任一命中）；剩余≥%d 的主料 %d 条。"%(len(neg),PARAMS["material_surplus_min"],len(surplus))),
     ],7)
 
-    outdir=os.path.join(ROOT,'out'); os.makedirs(outdir,exist_ok=True)
+    outdir=os.path.join(DATA_HOME, 'out'); os.makedirs(outdir,exist_ok=True)
     out=os.path.join(outdir,"生产监控日报_%s.xlsx"%args.date)
     wb.save(out)
     print("[done] 已生成:",out)

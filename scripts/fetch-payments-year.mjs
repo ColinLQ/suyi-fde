@@ -4,10 +4,13 @@
 // 用法：node scripts/fetch-payments-year.mjs [--days 365 | --sday 2025-01-01 --eday 2026-10-09]
 //        [--out data/raw/<date>/<slot>/duoke_payments_365d.jsonl] [--workers 3] [--interval 300]
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { harvestAuth } from './harvest-auth.mjs';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -22,7 +25,7 @@ const fmt = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '
 const dayOff = n => { const dt = new Date(today); dt.setDate(dt.getDate() + n); return fmt(dt); };
 const sday = args.sday || (days ? dayOff(-(days - 1)) : dayOff(-364));
 const eday = args.eday || dayOff(0);
-const outPath = args.out || path.join(root, 'data', 'raw', fmt(today), 'pm', `duoke_payments_${sday}_${eday}.jsonl`);
+const outPath = args.out || path.join(dataHome, 'data', 'raw', fmt(today), 'pm', `duoke_payments_${sday}_${eday}.jsonl`);
 const timeoutMs = 30000;
 const workers = Number(args.workers || 3);
 const interval = Number(args.interval || 300);
@@ -35,7 +38,7 @@ const h = await harvestAuth({}).catch(() => ({}));
 if (h.duoke?.ok) auth = { creds: h.duoke.creds, from: '实时收割' };
 if (!auth) {
   try {
-    const cache = JSON.parse(fs.readFileSync(path.join(root, 'state', 'auth.json'), 'utf8'));
+    const cache = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'auth.json'), 'utf8'));
     const fresh = (Date.now() - new Date(cache.harvested_at).getTime()) < cacheHours * 3600e3;
     if (fresh && cache.duoke?.ok) auth = { creds: cache.duoke.creds, from: `缓存(${cache.harvested_at})` };
   } catch {}

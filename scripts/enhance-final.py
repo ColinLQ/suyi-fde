@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # 终版: ①销售02/生产06补图 ②删无意义表(销售05与06合并视角、生产03删) ③全部商品表加参考建议列
-import os
-import json
-from pathlib import Path
+import json, os
 from datetime import datetime, timedelta
 from collections import defaultdict
 import openpyxl
@@ -33,10 +31,11 @@ al_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
 al_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
 al_r = Alignment(horizontal="right", vertical="center")
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-RAW = f"{SKILL}/data/raw/2026-10-09/pm"
-OUTDIR = f"{SKILL}/out"
-PIC = f"{SKILL}/state/goods-pics"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+RAW = f"{DATA_HOME}/data/raw/2026-10-09/pm"
+OUTDIR = f"{DATA_HOME}/out"
+PIC = f"{DATA_HOME}/state/goods-pics"
 TODAY = "2026-10-10"
 NOW = datetime(2026, 10, 10)
 
@@ -377,8 +376,18 @@ ws.cell(2, sug_col, "处理建议")
 ws.column_dimensions[get_column_letter(sug_col)].width = 34
 amtcol = find_col(ws, "欠款(¥)")
 paycol = find_col(ws, "最近回款")
-INTERNAL = {"郑玲洁", "郑玲洁（柳川田家）", "泉州刻为（工厂）", "泉州刻为（现货）", "BSJ（公司订单）", "EHT", "DOA",
-            "2025年公司特卖会配货", "版衣特卖", "特卖", "特价", "清货", "2026年7月2日仓库清货"}
+INTERNAL = {"员工A", "员工A（客户B）", "工厂主体账户", "工厂现货账户", "BSJ（公司订单）", "EHT", "DOA",
+            "2025年公司特卖会配货", "特卖账户", "特卖", "特价", "清货", "仓库清货户"}
+# 账户实名已脱敏（代称与真实账户的映射在本地 config-local/sales-params.local.json，不入git）；
+# 若本地有真实清单则以本地为准
+try:
+    _local_cfg = json.load(open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                             '..', 'WorkBuddy', 'scm-collector-data', 'config-local', 'sales-params.local.json'), encoding='utf-8'))
+    _real = set(_local_cfg.get('internal_accounts', []))
+    if _real and '<' not in next(iter(_real)):
+        INTERNAL = _real
+except Exception:
+    pass
 for r in range(3, ws.max_row + 1):
     name = str(ws.cell(r, 1).value or "")
     amt = num(ws.cell(r, amtcol).value)

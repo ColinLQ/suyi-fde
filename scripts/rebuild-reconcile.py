@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # 03表重造: 双系统对账 → 「钱对账+货对账」实算版
+import os
 import json
-from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 import openpyxl
@@ -29,9 +29,10 @@ al_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
 al_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
 al_r = Alignment(horizontal="right", vertical="center")
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-RAW = f"{SKILL}/data/raw/2026-10-09/pm"
-OUTDIR = f"{SKILL}/out"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+RAW = f"{DATA_HOME}/data/raw/2026-10-09/pm"
+OUTDIR = f"{DATA_HOME}/out"
 TODAY = "2026-10-10"
 NOW = datetime(2026, 10, 10)
 

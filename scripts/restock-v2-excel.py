@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # 将 V2 补货建议写入生产部Excel(07表) 
 import json
-from pathlib import Path
 from datetime import datetime
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Side, Border
@@ -28,13 +27,14 @@ al_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
 al_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
 al_r = Alignment(horizontal="right", vertical="center")
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-TODAY = "2026-10-10"
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 
-data = json.load(open(f"{SKILL}/out/restock-v2-{TODAY}.json", encoding="utf-8"))
+data = json.load(open(f"{DATA_HOME}/out/restock-v2-{TODAY}.json", encoding="utf-8"))
 rows = data["rows"]
 
-wb = openpyxl.load_workbook(f"{SKILL}/out/数据包-生产部-{TODAY}.xlsx")
+wb = openpyxl.load_workbook(f"{DATA_HOME}/out/数据包-生产部-{TODAY}.xlsx")
 # 删旧重建
 for name in list(wb.sheetnames):
     if name.startswith("07·"):
@@ -88,6 +88,6 @@ ws.cell(nr, 1).alignment = Alignment(horizontal="left", vertical="top", wrap_tex
 ws.row_dimensions[nr].height = 45
 ws.freeze_panes = "D3"
 
-wb.save(f"{SKILL}/out/数据包-生产部-{TODAY}.xlsx")
+wb.save(f"{DATA_HOME}/out/数据包-生产部-{TODAY}.xlsx")
 print(f"✅ 生产部Excel +V2对比表 ({len(rows)}款)")
 print(f"sheets: {wb.sheetnames}")

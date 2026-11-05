@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 // verify-stockout-202609.mjs — 对账脚本：重拉出货记录+跟单单，用多口径核对9月数字（只读）。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { harvestAuth } from './harvest-auth.mjs';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 let auth = null;
 const h = await harvestAuth({}).catch(() => ({}));
 if (h.yizhe?.ok) auth = h.yizhe.creds;
 if (!auth) {
   try {
-    const cache = JSON.parse(fs.readFileSync(path.join(root, 'state', 'auth.json'), 'utf8'));
+    const cache = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'auth.json'), 'utf8'));
     if (cache.yizhe?.ok) auth = cache.yizhe.creds;
   } catch {}
 }
@@ -56,11 +59,11 @@ const out = {
   stockout: stockout.map(r => ({ record_id: r.record_id, production_id: r.production_id, template_no: r.template_no, stockout_at: r.stockout_at, created_at: r.created_at, total_num: r.total_num, is_revoke: r.is_revoke, follower_user_name: r.follower_user_name, factory_name: r.factory_name })),
   follows: follows.map(r => ({ follow_order_id: r.follow_order_id, production_id: r.production_id, template_no: r.template_no, created_at: r.created_at, finish_time: r.finish_time, last_stockout_time: r.last_stockout_time, status: r.status, status_desc: r.status_desc, plan_total_num: r.plan_total_num, stock_out_num: r.stock_out_num?.value ?? r.stock_out_num, follower_user_name: r.follower_user_name, factory_name: r.factory_name })),
 };
-fs.writeFileSync(path.join(root, 'data', 'raw', '2026-10-22', 'verify-202609.json'), JSON.stringify(out));
+fs.writeFileSync(path.join(dataHome, 'data', 'raw', '2026-10-22', 'verify-202609.json'), JSON.stringify(out));
 console.log(`[verify] 出货记录 ${stockout.length} 条（10-10 快照为 4467）；跟单单 ${follows.length}`);
 
 // —— 多口径对账（9月） ——
-const old = fs.readFileSync(path.join(root, 'data', 'raw', '2026-10-10', 'pm', 'perf_stockout_all.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+const old = fs.readFileSync(path.join(dataHome, 'data', 'raw', '2026-10-10', 'pm', 'perf_stockout_all.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 const oldIds = new Set(old.map(r => r.record_id));
 const newIds = new Set(stockout.map(r => r.record_id));
 const added = stockout.filter(r => !oldIds.has(r.record_id));

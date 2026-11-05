@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 # 数据包完整性体检 + 图片缓存盘点
-import os, glob
-import json
-from pathlib import Path
+import json, os, glob
 from collections import defaultdict
 import openpyxl
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-TODAY = "2026-10-10"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 
 print("=" * 60)
 print("一、四份数据包完整性体检")
 print("=" * 60)
 issues = []
 for dept in ["研发部", "生产部", "销售部", "财务部"]:
-    f = f"{SKILL}/out/数据包-{dept}-{TODAY}.xlsx"
+    f = f"{DATA_HOME}/out/数据包-{dept}-{TODAY}.xlsx"
     if not os.path.exists(f):
         issues.append(f"[缺失] {dept} 文件不存在")
         continue
@@ -51,7 +49,7 @@ print()
 print("=" * 60)
 print("二、图片缓存盘点")
 print("=" * 60)
-pic_dir = f"{SKILL}/state/goods-pics"
+pic_dir = f"{DATA_HOME}/state/goods-pics"
 pics = {}
 if os.path.isdir(pic_dir):
     for p in glob.glob(f"{pic_dir}/*"):
@@ -63,14 +61,14 @@ for k, v in sample:
 
 # 数据包涉及的商品款号清单(需配图的表)
 need_pics = defaultdict(set)
-wb = openpyxl.load_workbook(f"{SKILL}/out/数据包-生产部-{TODAY}.xlsx")
+wb = openpyxl.load_workbook(f"{DATA_HOME}/out/数据包-生产部-{TODAY}.xlsx")
 for wsname in ["01·周滚动补货计划(净缺口法)", "07·补货建议V2·三因子对比"]:
     if wsname in wb.sheetnames:
         for r in wb[wsname].iter_rows(min_row=3, values_only=True):
             if r[1]:
                 ref = str(r[1]).split("-")[0]
                 need_pics["生产部"].add(ref)
-wb2 = openpyxl.load_workbook(f"{SKILL}/out/数据包-研发部-{TODAY}.xlsx")
+wb2 = openpyxl.load_workbook(f"{DATA_HOME}/out/数据包-研发部-{TODAY}.xlsx")
 for wsname in ["02·爆款基因库·近30日动销Top30", "03·慢销止损清单"]:
     if wsname in wb2.sheetnames:
         for r in wb2[wsname].iter_rows(min_row=3, values_only=True):
@@ -85,7 +83,7 @@ for d, refs in need_pics.items():
 
 # 商品档案的pic_url
 goods_pic = {}
-with open(f"{SKILL}/data/raw/2026-10-09/pm/duoke_goods.jsonl", encoding="utf-8") as f:
+with open(f"{DATA_HOME}/data/raw/2026-10-09/pm/duoke_goods.jsonl", encoding="utf-8") as f:
     for line in f:
         line = line.strip()
         if not line:
@@ -104,7 +102,7 @@ print(f"缺图款 {len(miss)} 中, {have_url} 款有pic_url可下载")
 
 # 衣者样板图(研发部设计师矩阵可用)
 tpl_thumb = {}
-with open(f"{SKILL}/data/raw/2026-10-09/pm/yizhe_template_list.jsonl", encoding="utf-8") as f:
+with open(f"{DATA_HOME}/data/raw/2026-10-09/pm/yizhe_template_list.jsonl", encoding="utf-8") as f:
     for line in f:
         line = line.strip()
         if not line:

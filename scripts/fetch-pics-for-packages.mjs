@@ -1,18 +1,20 @@
 // 补拉指定清单款号图片: node fetch-pics-for-packages.mjs --list state/slow-refs.json
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
-const SKILL = path.resolve(import.meta.dirname, '..');
-const PM = path.join(SKILL, 'data/raw/2026-10-09/pm');
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const PM = path.join(dataHome, 'data/raw/2026-10-09/pm');
 const rl = f => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 
 const listArg = process.argv.find(x => x.startsWith('--list='));
 const refs = listArg
   ? JSON.parse(fs.readFileSync(path.join(SKILL, listArg.split('=')[1]), 'utf8'))
   : (() => {
-      const restockV1 = JSON.parse(fs.readFileSync(path.join(SKILL, 'out/restock-deep-2026-10-09.json'), 'utf8'));
-      const restockV2 = JSON.parse(fs.readFileSync(path.join(SKILL, 'out/restock-v2-2026-10-10.json'), 'utf8'));
-      const sales = JSON.parse(fs.readFileSync(path.join(SKILL, 'out/销售数据报告-2026-10-10.json'), 'utf8'));
+      const restockV1 = JSON.parse(fs.readFileSync(path.join(dataHome, 'out/restock-deep-2026-10-09.json'), 'utf8'));
+      const restockV2 = JSON.parse(fs.readFileSync(path.join(dataHome, 'out/restock-v2-2026-10-10.json'), 'utf8'));
+      const sales = JSON.parse(fs.readFileSync(path.join(dataHome, 'out/销售数据报告-2026-10-10.json'), 'utf8'));
       const s = new Set();
       restockV1.rows.forEach(x => x.item_ref && s.add(String(x.item_ref)));
       restockV2.rows.forEach(x => x.item_ref && s.add(String(x.item_ref)));
@@ -20,10 +22,10 @@ const refs = listArg
       return [...s];
     })();
 
-const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
+const auth = JSON.parse(fs.readFileSync(path.join(dataHome, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.creds.key;
 const HDRS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15;7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36', 'Referer': 'https://air.duoke.net/', 'Origin': 'https://air-web.duoke.net', 'accept-language': 'chs' };
-const CDN = 'https://cn-cdn-oss.duoke.net/user_TENANT/'; // // TODO: user_TENANT 替换为本租户ID（多客商品图URL中的 user_数字 段）
+const CDN = 'https://cn-cdn-oss.duoke.net/user_19228/';
 const THUMB = '?x-oss-process=image/resize,m_mfit,h_140,w_140/quality,q_80';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -37,9 +39,9 @@ for (const g of goods) {
   }
 }
 
-const picDir = path.join(SKILL, 'state/goods-pics');
+const picDir = path.join(dataHome, 'state/goods-pics');
 fs.mkdirSync(picDir, { recursive: true });
-const cacheF = path.join(SKILL, 'state/goods-pics.json');
+const cacheF = path.join(dataHome, 'state/goods-pics.json');
 const cache = fs.existsSync(cacheF) ? JSON.parse(fs.readFileSync(cacheF, 'utf8')) : {};
 
 async function fetchPicHash(id) {

@@ -15,13 +15,16 @@
 //   --check：收割成功后各发一个只读探测请求验证登录态（衣者 get_user_info / 多客 admin_get_staff_list）
 // 输出：末行打印JSON摘要；两系统均未收割到凭据时退出码1
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 const run = promisify(execFile);
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -206,8 +209,8 @@ export async function harvestAuth(opts = {}) {
   const [yizhe, duoke] = await Promise.all([harvestSystem('yizhe', SYSTEMS.yizhe, ports), harvestSystem('duoke', SYSTEMS.duoke, ports)]);
   const out = { yizhe, duoke, ports, harvested_at: new Date().toISOString() };
   if (yizhe.ok || duoke.ok) {
-    fs.mkdirSync(path.join(root, 'state'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'state', 'auth.json'), JSON.stringify(out, null, 2));
+    fs.mkdirSync(path.join(dataHome, 'state'), { recursive: true });
+    fs.writeFileSync(path.join(dataHome, 'state', 'auth.json'), JSON.stringify(out, null, 2));
   }
   return out;
 }
@@ -272,12 +275,12 @@ async function main() {
     const creds = importCreds(t);
     const result = { yizhe: creds.yizhe ? { ok: true, creds: creds.yizhe } : { ok: false, reason: '请求文件中未发现衣者token' }, duoke: creds.duoke ? { ok: true, creds: creds.duoke } : { ok: false, reason: '请求文件中未发现多客key' }, harvested_at: new Date().toISOString() };
     if (creds.yizhe || creds.duoke) {
-      fs.mkdirSync(path.join(root, 'state'), { recursive: true });
-      fs.writeFileSync(path.join(root, 'state', 'auth.json'), JSON.stringify(result, null, 2));
+      fs.mkdirSync(path.join(dataHome, 'state'), { recursive: true });
+      fs.writeFileSync(path.join(dataHome, 'state', 'auth.json'), JSON.stringify(result, null, 2));
     }
     console.log(`  衣者：${creds.yizhe ? '✓ 已从请求文件导入token' : '✗ ' + result.yizhe.reason}`);
     console.log(`  多客：${creds.duoke ? '✓ 已从请求文件导入key' : '✗ ' + result.duoke.reason}`);
-    console.log(JSON.stringify({ yizhe: { ok: !!creds.yizhe }, duoke: { ok: !!creds.duoke }, auth_file: creds.yizhe || creds.duoke ? path.join(root, 'state', 'auth.json') : null }));
+    console.log(JSON.stringify({ yizhe: { ok: !!creds.yizhe }, duoke: { ok: !!creds.duoke }, auth_file: creds.yizhe || creds.duoke ? path.join(dataHome, 'state', 'auth.json') : null }));
     process.exit(creds.yizhe || creds.duoke ? 0 : 1);
   }
   console.log(`[harvest-auth] 自动发现采集浏览器DevTools端口（优先${port}，其次扫描本机监听端口）…`);
@@ -290,7 +293,7 @@ async function main() {
   }
   if (args.check && r.yizhe.ok) { const p = await probe({ sysKey: 'yizhe', creds: r.yizhe.creds }); summary.yizhe.check = p; console.log(`  衣者登录探测：${p.ok ? '✓ ' + p.msg : '✗ ' + p.msg}`); }
   if (args.check && r.duoke.ok) { const p = await probe({ sysKey: 'duoke', creds: r.duoke.creds }); summary.duoke.check = p; console.log(`  多客登录探测：${p.ok ? '✓ ' + p.msg : '✗ ' + p.msg}`); }
-  summary.auth_file = r.yizhe.ok || r.duoke.ok ? path.join(root, 'state', 'auth.json') : null;
+  summary.auth_file = r.yizhe.ok || r.duoke.ok ? path.join(dataHome, 'state', 'auth.json') : null;
   console.log(JSON.stringify(summary));
   process.exit(r.yizhe.ok || r.duoke.ok ? 0 : 1);
 }

@@ -1,13 +1,20 @@
-# 运行时数据（含采集凭据与业务数据，严禁入库）
+# Python
+__pycache__/
+*.pyc
+*.py[cod]
+
+# 备份与临时文件
+*.bak
+*.bak.*
+.DS_Store
+
+# 运行时数据（本 skill 数据外置到 ~/WorkBuddy/scm-collector-data 或 SCM_DATA_HOME，绝不入库）
 state/
 data/
 out/
+auth.json
+auth.json.bak*
 
-# 本机私有配置（企微 webhook 等）
-config/*.local.json
-
-# 杂项
-.DS_Store
-__pycache__/
-*.pyc
-node_modules/
+# 环境与日志
+.env
+*.log

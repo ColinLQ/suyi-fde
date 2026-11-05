@@ -14,8 +14,9 @@ f_note_h = Font(name="PingFang SC", size=9, bold=True, color=xl_color("#374151")
 fill_note = PatternFill("solid", fgColor=XL_GRAY_BG)
 al_note = Alignment(horizontal="left", vertical="top", wrap_text=True)
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-TODAY = "2026-10-10"
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 
 def write_note_block(ws, start_row, ncol, lines):
     r = start_row
@@ -110,8 +111,8 @@ NOTES = {
         ],
         "02·客户信用分档规则": [
             "▍这张表回答什么：接单前该不该设限——信用分档的规则框架。",
-            "▍总欠款¥310万=98家客户debt字段合计(多客档案,截至10-09)。分档细则待柳红拍板内部账户清单后落地。",
-            "▍⚠️欠款Top5多为内部/关联账户(郑玲洁两户/工厂/特卖会)——真实客户欠款剔除后约¥100万量级,先甄别再催收。",
+            "▍总欠款¥310万=98家客户debt字段合计(多客档案,截至10-09)。分档细则待销售负责人拍板内部账户清单后落地。",
+            "▍⚠️欠款Top5多为内部/关联账户(员工A两户/工厂/特卖会)——真实客户欠款剔除后约¥100万量级,先甄别再催收。",
         ],
         "03·双系统对账": [
             "▍这张表回答什么：两套系统的钱和货对不对得上。",
@@ -131,7 +132,7 @@ NOTES = {
         "06·欠款客户明细(98家)": [
             "▍这张表回答什么：每家欠多少、最近一次回款何时——催收优先级清单。",
             "▍红底=欠款>10万。最近回款=近1年流水该客户最后一笔收款(无=近1年零回款,最高风险)。",
-            "▍⚠️先甄别内部账户(郑玲洁/BSJ/EHT/特卖会等)——业务确认后再定催收顺序。",
+            "▍⚠️先甄别内部账户(员工A/BSJ/EHT/特卖会等)——业务确认后再定催收顺序。",
         ],
         "07·款级毛利排行": [
             "▍这张表回答什么：卖得多的款≠赚钱多的款——补货决策加毛利维度。",
@@ -144,7 +145,7 @@ NOTES = {
 
 for dept, sheets in NOTES.items():
     print(f"{dept}...")
-    wb = openpyxl.load_workbook(f"{SKILL}/out/数据包-{dept}-{TODAY}.xlsx")
+    wb = openpyxl.load_workbook(f"{DATA_HOME}/out/数据包-{dept}-{TODAY}.xlsx")
     for sn_prefix, lines in sheets.items():
         target = next((s for s in wb.sheetnames if s.startswith(sn_prefix[:8])), None)
         if not target:
@@ -162,5 +163,5 @@ for dept, sheets in NOTES.items():
             continue
         write_note_block(ws, ws.max_row + 2, min(ws.max_column, 12), lines)
         print(f"  {target[:10]}: +{len(lines)}条")
-    wb.save(f"{SKILL}/out/数据包-{dept}-{TODAY}.xlsx")
+    wb.save(f"{DATA_HOME}/out/数据包-{dept}-{TODAY}.xlsx")
 print("✅ 三部门口径说明完成")

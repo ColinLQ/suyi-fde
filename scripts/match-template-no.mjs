@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // match-template-no.mjs — 款号映射：全等 → 辅助(款名+品类) → 人工队列。零网络。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const stateDir = path.join(root, 'state');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const stateDir = path.join(dataHome, 'state');
 fs.mkdirSync(stateDir, { recursive: true });
 const db = JSON.parse(fs.readFileSync(path.join(stateDir, 'db.json'), 'utf8'));
 const dates = Object.keys(db.days).sort();

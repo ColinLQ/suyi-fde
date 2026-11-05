@@ -37,6 +37,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.formatting.rule import CellIsRule
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill 根目录
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 
 # ============ 会议拍板规则（改动须留痕） ============
 RULES = dict(fab=1, pat=3, sew=3, order=7, stay=14, review=20)
@@ -306,7 +307,7 @@ def main():
     ap.add_argument('--out', default=None)
     args = ap.parse_args()
 
-    base = os.path.join(ROOT, 'data', 'raw', args.date)
+    base = os.path.join(DATA_HOME, 'data', 'raw', args.date)
     cands = [os.path.join(base, args.slot, 'yizhe_template_list.jsonl'),
              os.path.join(base, 'am', 'yizhe_template_list.jsonl'),
              os.path.join(base, 'pm', 'yizhe_template_list.jsonl')]
@@ -318,7 +319,7 @@ def main():
 
     prev_rows = None
     if args.prev_date:
-        pbase = os.path.join(ROOT, 'data', 'raw', args.prev_date)
+        pbase = os.path.join(DATA_HOME, 'data', 'raw', args.prev_date)
         pcands = [os.path.join(pbase, args.slot, 'yizhe_template_list.jsonl'),
                   os.path.join(pbase, 'am', 'yizhe_template_list.jsonl'),
                   os.path.join(pbase, 'pm', 'yizhe_template_list.jsonl')]
@@ -342,7 +343,7 @@ def main():
     dress_pct = (season_total[4] / season_total[-1] * 100) if season_total and season_total[-1] else 0
     active = sum(D['pool'][s] for s in ['新开发', '面辅料齐', '已打板', '已车板'])
 
-    out_path = args.out or os.path.join(ROOT, 'out', f'样衣管理日报-{args.date}.xlsx')
+    out_path = args.out or os.path.join(DATA_HOME, 'out', f'样衣管理日报-{args.date}.xlsx')
     wb = openpyxl.Workbook()
     wb.properties.title = f'样衣管理日报 {args.date}'
 
@@ -541,7 +542,7 @@ def main():
     wb.save(out_path)
     summary = dict(date=args.date, total=D['total'], active=active, warns=len(warns),
                    warns_high=n_high, review_ready=review_ready, review_pending=review_pending,
-                   audit=len(audit), audit_recent=n_recent, out=os.path.relpath(out_path, ROOT))
+                   audit=len(audit), audit_recent=n_recent, out=os.path.relpath(out_path, DATA_HOME))
     print(json.dumps(summary, ensure_ascii=False))
 
 if __name__ == '__main__':

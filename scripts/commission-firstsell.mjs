@@ -14,9 +14,12 @@
 //        state/goods-remarks.json（多客商品备注日期缓存）
 // 产出：out/commission-<月>.json（供 build-commission-excel.py）
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const MONTH = process.argv.includes('--month') ? process.argv[process.argv.indexOf('--month') + 1] :
   new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' }).slice(0, 7); // 默认当月，定时任务传上月
 // 数据源自动发现：data/raw/<任意日期>/<槽>/ 下按 mtime 取最新
@@ -27,7 +30,7 @@ const findLatest = name => {
     if (e.isDirectory()) walk(p);
     else if (e.name === name) hits.push(p);
   });
-  walk(path.join(root, 'data/raw'));
+  walk(path.join(dataHome, 'data/raw'));
   if (!hits.length) throw new Error('未找到数据文件: ' + name);
   hits.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
   return hits[0];
@@ -36,8 +39,8 @@ const SRC_DETAILS = findLatest('duoke_order_details.jsonl');
 const SRC_GOODS = findLatest('duoke_goods.jsonl');
 const SRC_PURCHASE = findLatest('perf_purchase_all.jsonl');
 const SRC_INSTOCK = findLatest('perf_instock_done.jsonl');
-const SRC_REMARKS = path.join(root, 'state/goods-remarks.json');
-const OUT = path.join(root, 'out', `commission-${MONTH}.json`);
+const SRC_REMARKS = path.join(dataHome, 'state/goods-remarks.json');
+const OUT = path.join(dataHome, 'out', `commission-${MONTH}.json`);
 
 const read = f => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
 // 时区修正：多客ctime为unix秒，按 Asia/Shanghai 转日期（避免UTC偏移一天）
@@ -225,7 +228,7 @@ for (const c of cands) {
   results.push(rec);
 }
 
-fs.mkdirSync(path.join(root, 'out'), { recursive: true });
+fs.mkdirSync(path.join(dataHome, 'out'), { recursive: true });
 fs.writeFileSync(OUT, JSON.stringify({ month: MONTH, generatedAt: new Date().toISOString(), rule: '开始=min(备注,首销)；结束=上架(备注)+30天自然日(无备注用首销)；首销早于上架>60天按老款重上架剔除；结束月=' + MONTH + '；首单量=入库SKU(降级计划数)；卖完=窗口销量≥首单量', results, quality, excludedCount: excluded.length, excludedSample: excluded.slice(0, 10) }, null, 1));
 console.log(`老款重上架剔除：${excluded.length} 款（首销早于上架备注>60天）`);
 const done = results.filter(r => r.conclusion !== '无法判定');

@@ -3,8 +3,10 @@
 // 输出 state/customer-merge-groups.json：groups=[[cid,cid,...],...] + evidence
 import fs from 'node:fs';
 import path from 'node:path';
-const SKILL = path.resolve(import.meta.dirname, '..');
-const PM = path.join(SKILL, 'data/raw/2026-10-09/pm');
+import os from 'node:os';
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const PM = path.join(dataHome, 'data/raw/2026-10-09/pm');
 const rl = f => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 
 const customers = rl(path.join(PM, 'duoke_customers.jsonl'));
@@ -78,7 +80,7 @@ const out = {
   active_customers: active.length,
   groups: meta,
 };
-const outF = path.join(SKILL, 'state/customer-merge-groups.json');
+const outF = path.join(dataHome, 'state/customer-merge-groups.json');
 fs.writeFileSync(outF, JSON.stringify(out, null, 1));
 const nAccounts = meta.reduce((s, g) => s + g.ids.length, 0);
 console.log('merge groups:', meta.length, '| accounts merged:', nAccounts, '| ->', outF);

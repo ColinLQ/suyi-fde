@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # build-perf-excel.py — 绩效分析报告 Excel 生成器（主交付物）
-# 数据源：out/performance-<统计月>.json（build-performance-report.mjs 产出）
-# 用法：python3 build-perf-excel.py [统计月]   默认 2026-09
+# 数据源：out/performance-2026-09.json（build-performance-report.mjs 产出）
 import json, re, sys
 from pathlib import Path
 from openpyxl import Workbook
@@ -9,13 +8,14 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image as XLImage
 
+import os
 ROOT = Path(__file__).resolve().parent.parent
-MONTH_ARG = sys.argv[1] if len(sys.argv) > 1 else '2026-09'
-data = json.loads((ROOT / 'out' / f'performance-{MONTH_ARG}.json').read_text(encoding='utf-8'))
+DATA_HOME = Path(os.environ.get('SCM_DATA_HOME') or (Path.home() / 'WorkBuddy' / 'scm-collector-data'))  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+data = json.loads((DATA_HOME / 'out' / 'performance-2026-09.json').read_text(encoding='utf-8'))
 MONTH = data['统计月']
-COST_PATH = ROOT / 'out' / f'cost-{MONTH}.json'
+COST_PATH = DATA_HOME / 'out' / f'cost-{MONTH}.json'
 COST = json.loads(COST_PATH.read_text(encoding='utf-8')) if COST_PATH.exists() else None
-PIC_DIR = ROOT / 'state' / 'goods-pics'
+PIC_DIR = DATA_HOME / 'state' / 'goods-pics'
 
 def pic_of(ref):
     """款号→本地图路径；匹配顺序：原样 → 全角/双横线归一 → 去客户后缀的纯款号；无图返回 None"""
@@ -132,7 +132,7 @@ wb = Workbook()
 
 # ═══ 1 报告总览 ═══
 ws = wb.active; ws.title = '报告总览'
-r = sheet_fill(ws, f'绩效分析与提成计算月报 · {MONTH}', '数据来源：衣者云SCM只读接口全量回捞；口径依据《绩效分析与提成计算需求文档-V1》')
+r = sheet_fill(ws, f'绩效分析与提成计算月报 · {MONTH}', '数据来源：衣者云SCM只读接口全量回捞（2026-10-10）；口径依据《绩效分析与提成计算需求文档-V1》')
 d = data['数据就绪度']
 overview = [
     ('采购跟单', f"{d['采购月单量']} 单 / {len(data['采购跟单'])} 名采购员（含未分配）", '采购/到厂超期单已标红，明细见「采购明细」'),
@@ -314,8 +314,8 @@ def nofile(ref):
     return r not in rows_g and r.replace('—', '-').replace('–', '-') not in rows_g
 
 _GOODS_REFS = set()
-_gf = max(Path(ROOT / 'data/raw').glob('*/pm/duoke_goods.jsonl'), key=lambda p: p.stat().st_mtime, default=None)  # 取最新商品档案快照
-if _gf and _gf.exists():
+_gf = DATA_HOME / 'data/raw/2026-10-09/pm/duoke_goods.jsonl'
+if _gf.exists():
     for _line in _gf.read_text(encoding='utf-8').splitlines():
         if _line.strip():
             try:
@@ -380,12 +380,12 @@ MAXB = max(_oc.values()) if _oc else 0
 NOTES = {
     '报告总览': [
         f'统计月：{MONTH}（月报建议每月 1 日出上月；当月进行中的月份不作完整月统计）。',
-        f'数据来源：衣者云 SCM 只读接口全量回捞。绩效类数据快照日、成本数据回捞日以采集链路（fetch-performance-history / fetch-cost-month）实际运行日为准，同一表内不混用不同时点数据。',
+        f'数据来源：衣者云 SCM 只读接口全量回捞。绩效类数据（采购/生产/设计/仓库）为 2026-10-10 快照；成本核算数据为 2026-10-23 实时回捞。同一表内不混用不同时点数据。',
         f'统计范围：{q["统计范围"]}。',
         '落月口径：一律按业务发生时间归月（出货=出货时间 stockout_at、采购=采购单创建时间 created_at），不按数据录入时间——保证同一笔业务只在发生月计提一次，避免跨月重复。',
         '四岗位提成口径建议：采购=接单数×超期折减；生产跟单=出货件数×超时分级系数；设计=下单款数；仓库=及时率。系数与封顶规则待管理层拍板，定稿前本报告仅作核算依据、不直接出金额。',
         '每张汇总表都配有对应"明细"表（一单/一批一行，含单号款号，可回系统原单核对），可直接作为提成底表使用。',
-        f'商品图片：六张明细表（采购/生产/设计/仓库/成本核算/成本异常）表尾均附"图片"列，取自多客商品档案缩略图（匹配顺序：原款号 → 全角横线归一 → 去客户后缀纯款号）。本月报表涉及 {len(_all_refs)} 款，其中 {len(_all_refs) - len(NO_PIC)} 款有图、{len(NO_PIC)} 款无图。无图两类原因：①多客有档案但从未上传图片（{len(NO_PIC) - len([r for r in NO_PIC if nofile(r)])} 款，需补传）；②多客无此款档案（{len([r for r in NO_PIC if nofile(r)])} 款，新款未建档或建档晚于商品档案快照日，管理动作：新款建档时把图片上传设为必填步骤）。',
+        f'商品图片：六张明细表（采购/生产/设计/仓库/成本核算/成本异常）表尾均附"图片"列，取自多客商品档案缩略图（匹配顺序：原款号 → 全角横线归一 → 去客户后缀纯款号）。本月报表涉及 {len(_all_refs)} 款，其中 {len(_all_refs) - len(NO_PIC)} 款有图、{len(NO_PIC)} 款无图。无图两类原因：①多客有档案但从未上传图片（{len(NO_PIC) - len([r for r in NO_PIC if nofile(r)])} 款，需补传）；②多客无此款档案（{len([r for r in NO_PIC if nofile(r)])} 款，新款未建档或建档晚于档案快照 2026-10-09，管理动作：新款建档时把图片上传设为必填步骤）。',
         '本文件不含独立的口径总表——每张工作表底部即该表的口径说明（取数接口、落月规则、公式、缺失值处理、异常披露）。口径调整（如超时分档、提成系数、联名款拆分）改生成脚本后重算当月即可，不影响原始数据。',
         '只读声明：全程只读查询接口，未做任何保存/删除/导出类写操作。',
     ],
@@ -408,7 +408,7 @@ NOTES = {
     '生产跟单汇总': [
         f'数据源：裁床出货记录（stockout_panel/record_list），按出货时间 stockout_at 落 {MONTH}：{d["出货月批次"]} 批 / {d["月出货件数"]:,} 件。',
         f'出货批次 ≠ 订单数：{d["出货月批次"]} 批对应 {ORDERS} 个生产单，其中 {MULTI} 单分了多批出货（最多一单出 {MAXB} 批）。一个订单可分多次交货，所以批次数大于订单数——系统按订单行统计、本表按出货批次统计，这是两边数字不同的第一个原因。',
-        f'与系统页面口径的差异：跟单管理按"出货时间筛月"圈出的是订单行，页面"出货数"=命中订单的累计出货（把同批订单 8 月、10 月出的件数一并算入）；本表 {d["月出货件数"]:,} 件只算 {MONTH} 当月实际出掉的货。8 月那批已在 8 月计过，再算一次就是重复计提。',
+        f'与系统页面口径的差异：跟单管理按"出货时间筛月"圈出的是订单行，页面"出货数"=命中订单的累计出货（含同批订单 8 月出的 1,472 件、10 月出的 234 件）；本表 {d["月出货件数"]:,} 件只算 {MONTH} 当月实际出掉的货。8 月那批已在 8 月计过，再算一次就是重复计提。',
         '超时分级=实际出货日 − 预计出货日：≤0 为"准时"，1-2 天、3-5 天、>5 天以上依次三档（按管理层 2026-10 确认的口径）。',
         '按时率=准时 ÷（准时+超1-2+超3-5+超5天以上）；"数据缺失"（未填预计出货时间）不计入分母，因此按时率是"可评估样本"内的比率，非全量。',
         '实际周期=实际出货日 − 主料最后到厂日，取自跟单进度"物料到厂"步骤文本；主料优先，辅料时间未纳入。该指标衡量从"有料可做"到"货出仓"的真实生产时长，与预计周期的差异反映工厂执行。',
@@ -491,6 +491,6 @@ for _name, _items in NOTES.items():
     if _name in wb.sheetnames:
         add_notes(wb[_name], _items)
 
-out = ROOT / 'out' / f'绩效分析报告-{MONTH}.xlsx'
+out = DATA_HOME / 'out' / f'绩效分析报告-{MONTH}.xlsx'
 wb.save(out)
 print('saved:', out)

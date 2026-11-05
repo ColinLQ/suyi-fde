@@ -22,33 +22,32 @@
   [补5] TOP10：01页前10行加底色标注
   [口径] 关联客户(刻为/清货/特卖等)打标不剔除；区域小样本标灰；微信渠道定义说明
 """
-import os, re
-import json
-from pathlib import Path
+import json, os, re
 from collections import defaultdict
 from datetime import datetime, timedelta
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-ROOT = str(Path(__file__).resolve().parent.parent)
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 TODAY = '2026-10-15'
 REPORT_TS = datetime(2026, 10, 15, 16, 0, 0)
-OUT = os.path.join(ROOT, 'out', f'研发需求总结-{TODAY}.xlsx')
+OUT = os.path.join(DATA_HOME, 'out', f'研发需求总结-{TODAY}.xlsx')
 
 # ================= 数据加载 =================
-report = json.load(open(os.path.join(ROOT, 'out', f'销售数据报告-{TODAY}.json')))
-details = [json.loads(l) for l in open(os.path.join(ROOT, 'data/raw/2026-10-09/pm/duoke_order_details.jsonl'))]
-orders30 = [json.loads(l) for l in open(os.path.join(ROOT, 'data/raw/2026-09-28/am/duoke_orders_30d.jsonl'))]
+report = json.load(open(os.path.join(DATA_HOME, 'out', f'销售数据报告-{TODAY}.json')))
+details = [json.loads(l) for l in open(os.path.join(DATA_HOME, 'data/raw/2026-10-09/pm/duoke_order_details.jsonl'))]
+orders30 = [json.loads(l) for l in open(os.path.join(DATA_HOME, 'data/raw/2026-09-28/am/duoke_orders_30d.jsonl'))]
 custs = {}
-for line in open(os.path.join(ROOT, 'data/raw/2026-10-09/pm/duoke_customers.jsonl')):
+for line in open(os.path.join(DATA_HOME, 'data/raw/2026-10-09/pm/duoke_customers.jsonl')):
     c = json.loads(line)
     custs[str(c['id'])] = c
 goods = {}
-for line in open(os.path.join(ROOT, 'data/raw/2026-10-09/pm/duoke_goods.jsonl')):
+for line in open(os.path.join(DATA_HOME, 'data/raw/2026-10-09/pm/duoke_goods.jsonl')):
     g = json.loads(line)
     goods[g['item_ref']] = g
-remarks = json.load(open(os.path.join(ROOT, 'state/goods-remarks.json')))
+remarks = json.load(open(os.path.join(DATA_HOME, 'state/goods-remarks.json')))
 
 TAG_MAP = {1:'微信',2:'档口',3:'刻为工厂/特卖',4:'福利/UUS拿货',5:'客户订单',6:'退单',7:'新客'}
 REGION_MAP = {'84':'福建','90':'广东','85':'江西','86':'四川','87':'湖南','88':'江苏','89':'太原',

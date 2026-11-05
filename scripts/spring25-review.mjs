@@ -3,11 +3,13 @@
 // 数据源：duoke_goods(商品快照2026-10-09) + duoke_order_details(3年明细) + yizhe_production_<year>spring(生产单)
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
-const SKILL = path.resolve(import.meta.dirname, '..');
-const RAW09 = path.join(SKILL, 'data/raw/2026-10-09/pm');
-const RAW10 = path.join(SKILL, 'data/raw/2026-10-10/pm');
-const OUT = path.join(SKILL, 'out');
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const RAW09 = path.join(dataHome, 'data/raw/2026-10-09/pm');
+const RAW10 = path.join(dataHome, 'data/raw/2026-10-10/pm');
+const OUT = path.join(dataHome, 'out');
 
 const YEAR = process.argv.includes('--year') ? process.argv[process.argv.indexOf('--year') + 1] : '2025';
 const OUTJSON = path.join(OUT, `spring${YEAR.slice(2)}-review-data.json`);
@@ -29,7 +31,7 @@ const normColor = c => {
 
 // ---------- 基础表 ----------
 const goodsByRef = new Map(goods.map(g => [g.item_ref, g]));
-const imgBase = 'http://cn-cdn-oss.duoke.net/user_TENANT/';
+const imgBase = 'http://cn-cdn-oss.duoke.net/user_19228/';
 function firstImg(g) {
   for (const s of Object.values(g.sku || {})) {
     const im = (s.img || []).find(x => x);

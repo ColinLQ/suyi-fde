@@ -4,11 +4,13 @@
 // 用法: node fetch-perf-goods-pics.mjs   （读 out/performance-2026-09.json 与 out/cost-2026-09.json 的统计月）
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
-const SKILL = path.resolve(import.meta.dirname, '..');
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const rl = f => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 
-const perf = JSON.parse(fs.readFileSync(path.join(SKILL, 'out/performance-2026-09.json'), 'utf8'));
+const perf = JSON.parse(fs.readFileSync(path.join(dataHome, 'out/performance-2026-09.json'), 'utf8'));
 const costP = path.join(SKILL, `out/cost-${perf['统计月']}.json`);
 const cost = fs.existsSync(costP) ? JSON.parse(fs.readFileSync(costP, 'utf8')) : { '成本明细': [] };
 
@@ -22,7 +24,7 @@ for (const x of cost['成本明细'] || []) x['款号'] && refs.add(x['款号'])
 console.log('报表涉及款号:', refs.size);
 
 // 2. 多客 goods id 映射（取最新一份全量快照）
-const pmRoot = path.join(SKILL, 'data/raw');
+const pmRoot = path.join(dataHome, 'data/raw');
 let goodsF = null, goodsMtime = 0;
 (function find(dir) {
   let ents = [];
@@ -42,16 +44,16 @@ const ref2id = new Map();
 for (const g of rl(goodsF)) if (g.item_ref) ref2id.set(g.item_ref, g.id);
 
 // 3. hash 缓存 + 下载
-const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
+const auth = JSON.parse(fs.readFileSync(path.join(dataHome, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.creds.key;
 const HDRS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36', 'Referer': 'https://air.duoke.net/', 'Origin': 'https://air-web.duoke.net', 'accept-language': 'chs' };
-const CDN = 'https://cn-cdn-oss.duoke.net/user_TENANT/'; // // TODO: user_TENANT 替换为本租户ID（多客商品图URL中的 user_数字 段）
+const CDN = 'https://cn-cdn-oss.duoke.net/user_19228/';
 const THUMB = '?x-oss-process=image/resize,m_mfit,h_140,w_140/quality,q_80';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const picDir = path.join(SKILL, 'state/goods-pics');
+const picDir = path.join(dataHome, 'state/goods-pics');
 fs.mkdirSync(picDir, { recursive: true });
-const cacheF = path.join(SKILL, 'state/goods-pics.json');
+const cacheF = path.join(dataHome, 'state/goods-pics.json');
 const cache = fs.existsSync(cacheF) ? JSON.parse(fs.readFileSync(cacheF, 'utf8')) : {};
 
 async function fetchPicHash(id) {
@@ -104,5 +106,5 @@ async function download(hash, ref) {
   }
   fs.writeFileSync(cacheF, JSON.stringify(cache, null, 1));
   console.log(`PICS done: ok=${ok} skip=${skip} miss=${miss} -> ${picDir}`);
-  if (missRefs.length) { fs.writeFileSync(path.join(SKILL, 'state/goods-pics-miss.json'), JSON.stringify(missRefs, null, 1)); console.log('缺失款清单 -> state/goods-pics-miss.json'); }
+  if (missRefs.length) { fs.writeFileSync(path.join(dataHome, 'state/goods-pics-miss.json'), JSON.stringify(missRefs, null, 1)); console.log('缺失款清单 -> state/goods-pics-miss.json'); }
 })();

@@ -4,9 +4,11 @@
 // 产出: data/raw/<date>/pm/duoke_goods.jsonl（覆盖当日）
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
-const SKILL = path.resolve(import.meta.dirname, '..');
-const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const auth = JSON.parse(fs.readFileSync(path.join(dataHome, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.creds.key;
 const HDRS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36', 'Referer': 'https://air.duoke.net/', 'Origin': 'https://air-web.duoke.net', 'accept-language': 'chs' };
 const API = 'https://api.duoke.net/index.php/goods/get_by_order';
@@ -15,7 +17,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const today = new Date();
 const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const day = fmt(today);
-const outDir = path.join(SKILL, 'data/raw', day, 'pm');
+const outDir = path.join(dataHome, 'data/raw', day, 'pm');
 fs.mkdirSync(outDir, { recursive: true });
 const outFile = path.join(outDir, 'duoke_goods.jsonl');
 

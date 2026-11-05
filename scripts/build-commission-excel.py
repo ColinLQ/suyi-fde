@@ -11,8 +11,9 @@ from openpyxl.utils import get_column_letter
 
 MONTH = sys.argv[1] if len(sys.argv) > 1 else '2026-09'
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, 'out', f'commission-{MONTH}.json')
-OUT = os.path.join(ROOT, 'out', f'首单30天卖完统计-{MONTH}.xlsx')
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+SRC = os.path.join(DATA_HOME, 'out', f'commission-{MONTH}.json')
+OUT = os.path.join(DATA_HOME, 'out', f'首单30天卖完统计-{MONTH}.xlsx')
 
 data = json.load(open(SRC))
 results = data['results']; quality = data['quality']

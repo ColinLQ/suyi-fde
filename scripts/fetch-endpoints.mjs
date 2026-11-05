@@ -13,10 +13,13 @@
 //    节奏等待不占并发槽——与原「持槽静默」饱和时的均值节奏一致，槽位只承载真实I/O）。
 // 输出：每端点一行结果；末行JSON总摘要。某系统凭据不可得（未登录/浏览器未启动）→ 该系统停止并退出码1（转登录阻断流程，见SKILL.md；智能体须硬停后续步骤）
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { harvestAuth } from './harvest-auth.mjs';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -93,7 +96,7 @@ if (!dryRun) {
   }
   if (!auth.yizhe || !auth.duoke) {
     try {
-      const cache = JSON.parse(fs.readFileSync(path.join(root, 'state', 'auth.json'), 'utf8'));
+      const cache = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'auth.json'), 'utf8'));
       const fresh = (Date.now() - new Date(cache.harvested_at).getTime()) < cacheHours * 3600e3;
       for (const k of ['yizhe', 'duoke']) {
         if (!auth[k] && fresh && cache[k]?.ok) {
@@ -164,7 +167,7 @@ const parseOk = (sys, text) => {
 const issues = [];
 const logIssue = (file, type, detail) => { issues.push({ ts: new Date().toISOString(), date, slot, batch, file, type, detail }); };
 const results = [];
-const rawDir = path.join(root, 'data', 'raw', date, slot);
+const rawDir = path.join(dataHome, 'data', 'raw', date, slot);
 if (!dryRun) fs.mkdirSync(rawDir, { recursive: true });
 
 // —— 特例：多客30日动销依赖当日商品列表的goods id（分批并发拉取后按序合并落盘） ——
@@ -305,8 +308,8 @@ if (dryRun) {
 }
 
 if (issues.length && !dryRun) {
-  fs.mkdirSync(path.join(root, 'state'), { recursive: true });
-  fs.appendFileSync(path.join(root, 'state', 'capture-issues.jsonl'), issues.map(i => JSON.stringify(i)).join('\n') + '\n');
+  fs.mkdirSync(path.join(dataHome, 'state'), { recursive: true });
+  fs.appendFileSync(path.join(dataHome, 'state', 'capture-issues.jsonl'), issues.map(i => JSON.stringify(i)).join('\n') + '\n');
 }
 const okCnt = results.filter(r => r.status === 'ok' || r.status === 'planned').length;
 const failCnt = results.length - okCnt;

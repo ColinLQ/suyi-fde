@@ -1,7 +1,14 @@
 # scm-collector 使用说明（部署与操作手册）
 
 > 衣者 × 多客 数据采集与经营日报智能体技能
-> 版本 V1.0 ｜ 更新 2026-09-24 ｜ 配套文档：《PRD》《SOP》《技术方案》（见项目 docs/ 目录）
+> 版本 V1.6 ｜ 更新 2026-11-05 ｜ 配套文档：《PRD》《SOP》《技术方案》（见项目 docs/ 目录）
+
+## 运行环境与数据目录（V1.6 起必读）
+
+- **平台**：Mac / Windows 均可运行（Node ≥ 18、Python3 + openpyxl）。脚本全部动态解析路径，无需修改任何代码即可部署
+- **代码目录**：skill 安装目录（含 SKILL.md / scripts / config / references），运行不会在其中产生数据
+- **数据目录**：默认 `~/WorkBuddy/scm-collector-data/`（用户主目录下），可用环境变量 `SCM_DATA_HOME` 指定其他位置；`state/`、`data/`、`out/` 三个子目录由脚本自动创建
+- 本文档中提到的 `out/...`、`state/...`、`data/raw/...` 路径均指**数据目录**下的相对路径
 
 ---
 

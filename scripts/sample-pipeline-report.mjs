@@ -17,9 +17,11 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const args = process.argv.slice(2);
 function argOf(flag, def) { const i = args.indexOf(flag); return i >= 0 && args[i + 1] ? args[i + 1] : def; }
 
@@ -41,7 +43,7 @@ const RULES = {
 const STEP_ORDER = ['新开发', '面辅料齐', '已打板', '已车板', '复版', '审版完成', '废版', '待下单', '面辅料已填', '用量已算', '制单完善', '确认可下单', '已下单'];
 
 function readSnapshot(date) {
-  const base = path.join(ROOT, 'data', 'raw', date);
+  const base = path.join(dataHome, 'data', 'raw', date);
   // 当日无指定槽位文件时，回落到该日期任意槽位的快照
   const candidates = [path.join(base, slot, 'yizhe_template_list.jsonl'), path.join(base, 'am', 'yizhe_template_list.jsonl'), path.join(base, 'pm', 'yizhe_template_list.jsonl')];
   const p = candidates.find(c => fs.existsSync(c));

@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 // ingest.mjs — raw JSONL → 标准化快照（state/db.json 按日期分区）。只读本地文件，零网络。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -16,8 +19,8 @@ const date = args.date || new Date().toISOString().slice(0, 10);
 // 早晚快照分槽：slot=am(默认，08:30采集) / pm(18:30采集)。同日二次采集互不覆盖，db.days[date][slot]
 const hour = new Date().getHours();
 const slot = args.slot || (hour >= 14 ? 'pm' : 'am');
-const rawDir = path.join(root, 'data', 'raw', date, slot);
-const stateDir = path.join(root, 'state');
+const rawDir = path.join(dataHome, 'data', 'raw', date, slot);
+const stateDir = path.join(dataHome, 'state');
 fs.mkdirSync(stateDir, { recursive: true });
 const dbPath = path.join(stateDir, 'db.json');
 const db = fs.existsSync(dbPath) ? JSON.parse(fs.readFileSync(dbPath, 'utf8')) : { days: {} };
@@ -53,12 +56,12 @@ function readWithFallback(f) {
       cand.push([ds, 'pm'], [ds, 'am']);
     }
     for (const [d, s] of cand) {
-      if (fs.existsSync(path.join(root, 'data', 'raw', d, s, f))) { dir = `${d}/${s}`; break; }
+      if (fs.existsSync(path.join(dataHome, 'data', 'raw', d, s, f))) { dir = `${d}/${s}`; break; }
     }
     readWithFallback._dir = dir || false;
   }
   if (!readWithFallback._dir) return { data: null, from: null };
-  const p2 = path.join(root, 'data', 'raw', readWithFallback._dir, f);
+  const p2 = path.join(dataHome, 'data', 'raw', readWithFallback._dir, f);
   const data = f.endsWith('.jsonl')
     ? fs.readFileSync(p2, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse)
     : JSON.parse(fs.readFileSync(p2, 'utf8'));

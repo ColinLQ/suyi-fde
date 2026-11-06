@@ -1,26 +1,33 @@
 ---
-name: scm-collector
+name: suyi-scm-collector
 display_name: 供应链数据采集与经营日报
 description: 衣者×多客数据采集与经营日报智能体技能：直连采集销售、生产、库存等只读数据，生成经营日报、销售报表、生产监控日报、样衣管理日报、补货分析等。当用户提到跑采集、出日报、发日报、销售数据、生产监控、样衣进度、补货分析、核算成本时使用。
-version: 1.5.0
+version: 1.9.5
 author: Colin
 ---
 
-# scm-collector Skill
+# suyi-scm-collector Skill
 
-> 衣者 × 多客 数据采集与经营日报智能体技能（V1.5 瘦身分层版）
+> 衣者 × 多客 数据采集与经营日报智能体技能（V1.8 比特浏览器版）
+
+## 跨平台说明（V1.8）
+
+- 全部脚本路径动态解析（`fileURLToPath`/`__file__`），Mac 与 Windows 均可运行，无硬编码绝对路径
+- 运行时数据（state/data/out）位于数据根目录：默认 `~/WorkBuddy/scm-collector-data/`，环境变量 `SCM_DATA_HOME` 可覆盖；首次运行自动创建
+- `config/` 属于代码，始终在 skill 目录内
+- **采集浏览器为比特浏览器（BitBrowser）专用窗口**（V1.8 起，chrome-devtools MCP 已移除）：窗口名 `suyi`，无代理直连；脚本体零依赖（Node 22 内置 WebSocket 跑裸 CDP），比特 Local API 地址/密钥读 `~/.workbuddy/mcp.json` 的 bitbrowser 配置，可用 `SCM_BIT_API`/`SCM_BIT_API_KEY`/`SCM_BIT_WINDOW_ID` 环境变量覆盖
 
 ## 铁律（每次执行前必读）
 
 1. **直连采集为默认**：`scripts/fetch-endpoints.mjs` 直调 `api.yizheyun.com` / `api.duoke.net` 的**只读查询**接口（仅限 endpoints.json 注册端点，**严禁**保存/新建/删除/导入导出类接口）。凭据来自采集浏览器实时登录态（CDP收割，harvest-auth.mjs），不自动登录、不绕过认证、不存账号密码。直连整系统失败 → 读 `references/采集兜底.md` 走浏览器UI采集
-2. **每次运行第0步必须实际调用 `list_pages`** 检查/唤起采集浏览器——禁止凭记忆假设登录态、禁止跳过
-3. **未登录 → 硬停且不做任何数据回答**：检测到任一系统未登录（登录页/code=201/凭据失效），**立即停止后续所有步骤**（不进入第1步采集、不跑后处理链、不生成日报、**不呈现任何产出文件、不做任何数据类回答——连既有缓存日报也不能发**），仅做一件事：通知用户去登录。对话提醒「{系统名}未登录，请登录后说继续」，并追加 `state/login-events.jsonl`。**禁止**用旧缓存数据生成日报冒充当日数据；用户说"继续"后从第0步重新检测
+2. **每次运行第0步必须实际跑 `check-login.mjs`** 校验/唤起采集窗口——禁止凭记忆假设登录态、禁止跳过
+3. **未登录 → 硬停且不做任何数据回答**：检测到任一系统未登录（登录页/code=201/凭据失效），**立即停止后续所有步骤**（不进入第1步采集、不跑后处理链、不生成日报、**不呈现任何产出文件、不做任何数据类回答——连既有缓存日报也不能发**），仅做一件事：通知用户去登录。对话提醒「{系统名}未登录，请在比特浏览器 suyi 窗口登录后说继续」，脚本已自动追加 `state/login-events.jsonl`。**禁止**用旧缓存数据生成日报冒充当日数据；用户说"继续"后从第0步重新检测
 4. **Demo模式仅当用户明确说"demo/模拟数据"**时使用（`scripts/mock-capture.mjs`）
-5. **只读红线（含页内脚本）**：evaluate_script/CDP 可用于只读查询与翻页驱动，但保存/删除/导出/提交类写操作一律禁止（「导出」按钮未获用户明确放开前禁止点击）
+5. **只读红线（含页内脚本）**：cdp-eval.mjs/CDP 可用于只读查询与翻页驱动，但保存/删除/导出/提交类写操作一律禁止（「导出」按钮未获用户明确放开前禁止点击）
 
 ## 触发条件
 
-- **「跑销售日报」/「出销售报表」/「销售数据」→ 销售数据报表链（Excel，V2.5；见下文「销售数据报表」节）——用户提到销售数据/销售报表/柳红报表时一律走这条，不是经营日报**
+- **「跑销售日报」/「出销售报表」/「销售数据」→ 销售数据报表链（Excel，V2.5；见下文「销售数据报表」节）——用户提到销售数据/销售报表/销售负责人报表时一律走这条，不是经营日报**
 - **「算提成」/「提成统计」/「首单卖完」→ 首单30天卖完统计链（见「首单30天卖完统计」节）**
 - **「样衣日报」/「样衣进度」/「样板管理」→ 样衣管理日报链（见「样衣管理日报」节）**
 - **「生产日报」/「生产监控」/「裁床出货对不上」/「货期逾期」→ 生产监控日报链（Excel，V2.3；见「生产监控日报」节）——用户提到生产过程监控（裁床/货期/产能/物料结存）时走这条，不是经营日报**
@@ -31,21 +38,25 @@ author: Colin
 ## 执行流程
 
 ```
-第0步 浏览器在线检查（list_pages → 必要时 new_page 两系统页面 → **登录态硬校验**）
+第0步 浏览器在线检查（node scripts/check-login.mjs → 自动拉起比特采集窗口+开两系统页面+登录态硬校验）
 → 第1步 直连采集 fetch-endpoints.mjs
 → 第2步 后处理链 ingest → match → alert → reconcile → report
 → （可选）第2.5步 补货深度分析 → 第3步 呈现产出
 未登录 → 登录阻断流程（全流程硬停+零数据回答，只通知登录）；直连整系统失败 → references/采集兜底.md
 ```
 
-### 第0步：确保采集浏览器在线并已登录（必做）
+### 第0步：确保采集浏览器在线并已登录（必做，V1.8 全脚本化）
 
-1. 调用 `mcp__chrome-devtools__list_pages` 实际检查（MCP按需自动拉起浏览器）
-2. 无两系统页面 → `new_page` 打开 `https://scm.yizheyun.com/sample-management/list` 与 `https://air.duoke.net/goods/list`（触发带凭据的请求，喂给第1步收割），`wait_for` 任意列表文案或等3秒
-3. **登录态硬校验（V1.6 新增，不可跳过）**：
-   - 任一页面 URL 跳转到登录页（如 `scm.yizheyun.com/user/login`）或 `take_snapshot` 可见登录表单 → 判定该系统**未登录** → 立即进入【登录阻断流程】，**不进入第1步**
-   - 两页面均停留在业务列表页 → 第1步
-   - 若因故无法打开页面（超时/浏览器异常），先按「异常处理速查」恢复浏览器再校验；恢复失败才允许带着明确披露进入第1步（由第1步的 auth 判定兜底）
+一条命令完成「拉起窗口 → 开两系统页面 → 登录态硬校验」：
+
+```bash
+node scripts/check-login.mjs        # 末行输出JSON：{ok, yizhe:{login,url,evidence}, duoke:{...}, window:{...}}
+```
+
+- 脚本自动：定位/拉起比特浏览器 `suyi` 窗口（幂等）→ 打开/复用两系统标签页 → **登录判定三信号**（V1.9.3，用户拍板不用 storage/IndexedDB）：① 页面跳登录页/可见密码框（最高优先级，SPA 跳转需等待完成，抢跑会误判）② 浏览器内业务 API 实测（CDP 只读监听页面自己的请求：衣者 code=200 登录/201 未登录；多客 err=0 登录/≠0 未登录）③ 业务页 complete 后稳定8秒不跳登录页。超时无明确信号按未登录（宁可误杀配合铁律3硬停）
+- `ok=true`（两系统均登录）→ 第1步；任一 `login=false` → 【登录阻断流程】；`error`/`login=null`（浏览器异常）→ 按「异常处理速查」恢复后重跑，恢复失败才允许带着明确披露进入第1步（由第1步的 auth 判定兜底）
+- 窗口缺失报错时：智能体可用比特 MCP `browser-create` 创建（name=suyi，无代理 noproxy，勿复用海外代理窗口），或用户在比特客户端手动创建后重跑
+- 辅助排查：`node scripts/cdp-eval.mjs --list`（列标签页）/ `--system yizhe --js '...'`（对页面只读求值）
 
 ### 第1步：直连采集
 
@@ -58,16 +69,16 @@ node scripts/fetch-endpoints.mjs --batch <morning|noon|evening|poll|weekly|first
 **判定与分支**：
 - `ok=true` → 第2步
 - `auth.yizhe=false` 或 `auth.duoke=false` → 【登录阻断流程】
-- 报「未发现任何Chrome DevTools端口」→ `references/采集兜底.md` 附A（MCP请求文件导入；多客key在IndexedDB的细节也在该文档）
+- 报「未发现任何Chrome DevTools端口」或比特分支未命中 → `references/采集兜底.md` 附A（比特客户端检查 + cdp-eval/请求文件导入；多客key在IndexedDB的细节也在该文档）
 - 个别端点失败非auth原因 → 记issue继续第2步，日报披露缺项，按报错自愈更新 endpoints.json
-- 整系统失败（批量404/结构变化/持续超时）→ `references/采集兜底.md` 附B（浏览器UI采集）
+- 整系统失败（批量404/结构变化/持续超时）→ `references/采集兜底.md` 附B（浏览器UI采集，AI经 cdp-eval.mjs 看页面驱动）
 
-**「检查登录状态」** → `node scripts/harvest-auth.mjs --check`
+**「检查登录状态」** → `node scripts/harvest-auth.mjs --check` 或 `node scripts/check-login.mjs`
 
 【登录阻断流程】（V1.7 起为硬停+零数据回答）：
 1. **立即停止后续所有步骤**——不跑后处理链、不生成/更新日报、**不呈现任何产出文件（含当日既有日报）、不做任何数据类回答/摘要/表格**
-2. 只做一件事——**通知去登录**：对话告知用户：「⛔ {系统名}未登录（原因：登录页跳转/code=201账号在别处登录/凭据失效），本次流程已停止。请在采集浏览器登录 {系统名} 后对我说“继续”，我将从头重新检测」
-3. 追加 `state/login-events.jsonl`（时间/系统/原因/触发批次）
+2. 只做一件事——**通知去登录**：对话告知用户：「⛔ {系统名}未登录（原因：登录页跳转/code=201账号在别处登录/凭据失效），本次流程已停止。请在比特浏览器 suyi 采集窗口登录 {系统名} 后对我说"继续"，我将从头重新检测」
+3. check-login.mjs 已自动追加 `state/login-events.jsonl`（时间/系统/原因/URL），无需重复记录
 4. **禁止**用旧缓存数据生成日报冒充当日数据，**禁止呈现/重发任何数据产出**（日报/看板/预警/分析一律不发）
 5. 用户说"继续"后**从第0步**重新检测（不从第1步，确保登录态真实有效）
 
@@ -117,7 +128,7 @@ python3 scripts/build-production-report.py --date <YYYY-MM-DD> [--slot am]
 
 - 产出 `out/生产监控日报_<日期>.xlsx`（5 sheet：总览/①数量比对/②货期预警/③工厂负荷/④辅料物料；每 sheet = 汇总KPI(上)+明细(中，整行按档位着色+表头筛选)+口径说明(下)）。
 - 核心规则（老板拍板）：数量偏差>1%且>2件预警、出货多出**零容差**、货期=预计完工日优先/裁床开工+7天兜底、物料负结存=领用超采购需盘点、主料剩余≥50单位列可复用。
-- **未纳入**（前置未满足）：采购数↔裁床数（预裁数口径待老板确认）、次品（多客次品仓待阿军确认）、损耗率（待华哥+采购定标）、4天备货推送（缺在手量字段）——口径文档有详细边界，勿擅自"补齐"。
+- **未纳入**（前置未满足）：采购数↔裁床数（预裁数口径待老板确认）、次品（多客次品仓待生产对接人确认）、损耗率（待生产经理+采购定标）、4天备货推送（缺在手量字段）——口径文档有详细边界，勿擅自"补齐"。
 
 ### 样衣管理日报（V1.1，2026-11-04 固化 Excel 交付；依据10-23设计部会议）★设计部链路
 
@@ -169,11 +180,11 @@ python3 scripts/build-commission-excel.py <YYYY-MM>      # ⑤ Excel → out/首
 
 **每月定时任务**（Automation）：每月1日 09:00，prompt 用以下通用文本（不含任何机器特定路径）：
 
-> 执行 scm-collector skill 的首单30天卖完统计链路，统计上一个自然月（如运行于11月则 --month 2026-10）：先做第0步登录校验（未登录→登录阻断流程，提醒用户登录后说"继续"），然后按 SKILL.md「首单30天卖完统计」节的执行链依次跑5个脚本，产出 Excel 后 present_files 呈现并摘要：总款数、全部卖完/部分/未卖完/无法判定分布、有颜色核对提示需人工复核的款数。脚本失败如实报告，不得用旧缓存冒充。
+> 执行 suyi-scm-collector skill 的首单30天卖完统计链路，统计上一个自然月（如运行于11月则 --month 2026-10）：先做第0步登录校验（未登录→登录阻断流程，提醒用户登录后说"继续"），然后按 SKILL.md「首单30天卖完统计」节的执行链依次跑5个脚本，产出 Excel 后 present_files 呈现并摘要：总款数、全部卖完/部分/未卖完/无法判定分布、有颜色核对提示需人工复核的款数。脚本失败如实报告，不得用旧缓存冒充。
 
 rrule=`FREQ=MONTHLY;BYMONTHDAY=1;BYHOUR=9;BYMINUTE=0`
 
-### 销售数据报表（V2.5，2026-10-12 定稿；柳红三轮沟通口径全量）★与经营日报是两条不同链路
+### 销售数据报表（V2.5，2026-10-12 定稿；销售负责人三轮沟通口径全量）★与经营日报是两条不同链路
 
 触发词：**「跑销售日报」** / 「出销售报表」 / 「销售数据」——**优先级高于经营日报**：只要用户话里带"销售"，走本链，不走 ingest/report-daily 五部门链。产出=out/销售数据报表-<当天>.xlsx（40 sheet）。执行链（第0/1步登录校验通过后）：
 
@@ -186,9 +197,9 @@ node scripts/fetch-goods-pics.mjs        # ④b 商品图增量下载（state/go
 python3 scripts/build-sales-excel.py     # ⑤ 最终交付：Excel 39 sheet 嵌图版 → out/销售数据报表-<日期>.xlsx
 ```
 
-**口径要点（V2.2 全集，柳红已逐表确认）**：
+**口径要点（V2.2 全集，销售负责人已逐表确认）**：
 - 客户按**同人账户合并**（同名+同手机号并查集，审计表可拆分）；新客=3年历史首次建档下单
-- 客单价/建单价=购买金额÷购买单数（退单不计）；连带=件数÷购买单数；**复购=客户再次购买同一款**（V2.4 柳红口径，替代补单）
+- 客单价/建单价=购买金额÷购买单数（退单不计）；连带=件数÷购买单数；**复购=客户再次购买同一款**（V2.4 销售负责人口径，替代补单）
 - **月未下单**=近3个月有下单、但本月（自然月）还没下单
 - **新客未复购**档位=15-30天 / 30-60天（60天以上不管）
 - **复购款TOP30**按款式统计（客户×款第2次购买起算），周/半月/月三窗
@@ -202,7 +213,7 @@ python3 scripts/build-sales-excel.py     # ⑤ 最终交付：Excel 39 sheet 嵌
 
 - 数据落 `data/raw/<日期>/pm/`；参数在 `config/sales-params.json`（内部账户清单/告急线/vip对应/当季定义——拍板后改配置即生效）
 - **交付偏好**：最终产出只发 **Excel**（40 sheet：00·口径说明页置首 + 39 数据 sheet、商品类嵌图、全量名单、筛选+冻结），md/json 仅中间产物
-- 待柳红拍板：专属剔除门槛≥2还是≥5；内部账户剔除清单
+- 待销售负责人拍板：专属剔除门槛≥2还是≥5；内部账户剔除清单
 - 哪些能定时、哪些要单独索取：见 `references/销售报表排程.md`
 - 按需专项：保本/亏本款（月度，需成本核算）、上市×天气归因、3年全量重采、合并组拆分重算、历史日期回溯报表
 
@@ -213,25 +224,29 @@ python3 scripts/build-sales-excel.py     # ⑤ 最终交付：Excel 39 sheet 嵌
 - `out/补货深度分析-<日期>.md` → 补货决策依据，摘要给用户
 - 数据质量异常必须显式说明，禁止静默
 
-## 允许使用的MCP工具（白名单）
+## 允许使用的浏览器能力（V1.8：比特 Local API + 裸 CDP，chrome-devtools MCP 已移除）
 
-list_pages / new_page / navigate_page / close_page ｜ take_snapshot ｜ click / fill / fill_form / drag / hover / press_key ｜ evaluate_script（只读；结果大时落文件）｜ wait_for ｜ list_network_requests / get_network_request（只读监听）｜ handle_dialog ｜ take_screenshot
+- **比特 Local API**（经 `scripts/bit.mjs`）：`/browser/list`、`/browser/detail`、`/browser/open`（幂等拉起）、`/browser/ports`、`/browser/close`——只管采集窗口生命周期，不碰其他窗口，不触碰 create/update/delete 类接口（创建窗口须经用户确认）
+- **裸 CDP**（经 `scripts/cdp.mjs`/`check-login.mjs`/`cdp-eval.mjs`）：Runtime.evaluate（只读；结果大时 --out 落文件）、Page.navigate（校验/翻页驱动）、标签页列表/新建
+- **页面操作替代方案**：原 take_snapshot/click/fill 类 UI 操作改为 cdp-eval.mjs 求值（读DOM文本/元素状态），翻页等驱动用 `--js` 组合location/点击前须用户确认的只读边界内进行
 
-**唯一禁区**：写操作——保存/删除/导出/提交类按钮与接口，无论 UI 点击还是 evaluate_script/CDP 执行。
+**唯一禁区**：写操作——保存/删除/导出/提交类按钮与接口，无论 cdp-eval 求值还是 CDP 直发，一律禁止。
 
 ## 异常处理速查
 
 | 状况 | 处置 |
 |---|---|
-| 浏览器未启动 | 第0步 list_pages/new_page 唤起 |
-| 收割器无调试端口（pipe模式） | 回落auth.json缓存；失效则 `references/采集兜底.md` 附A |
+| 比特客户端未运行 | 提醒用户启动比特浏览器客户端（Local API 54345）；启动后重跑第0步 |
+| suyi 窗口不存在 | 经比特 MCP browser-create 或用户手动创建（noproxy 无代理，勿复用代理窗口），登录两系统后说继续 |
+| API key 失效（token 失效/Login out） | 比特客户端「系统设置→Local API」重新复制 Token，更新 `~/.workbuddy/mcp.json` bitbrowser.headers.x-api-key |
+| 收割器无调试端口（比特离线+无其他浏览器） | 回落auth.json缓存；失效则 `references/采集兜底.md` 附A |
 | 未登录 | 登录阻断流程（硬停+零数据回答，第0步或第1步判定均可触发；不发任何日报/看板/数据摘要） |
 | 直连单端点失败 | 记issue继续；日报披露；自愈更新endpoints.json |
-| 直连整系统失败 | `references/采集兜底.md` 附B；同时探查新接口自愈 |
+| 直连整系统失败 | `references/采集兜底.md` 附B（cdp-eval UI采集）；同时探查新接口自愈 |
 | 限速/风控迹象 | 调大 rules.json「直连采集」请求间隔毫秒 |
-| wait_for 超时 | reload重试1次；仍超时标记缺项，日报注明 |
+| cdp-eval 求值超时 | 先 --list 确认标签页存活；页面跳转瞬间求值会失败，等待1-2秒重试1次；仍失败标记缺项并在日报注明 |
 | 翻页>max_pages | 停止记录，剩余页写 capture-issues.jsonl |
-| 弹窗遮挡 | handle_dialog(accept) 后重试 |
+| 页面弹窗遮挡（UI采集时） | cdp-eval 求值 `document.querySelector('dialog/el')` 状态确认后按只读边界处理 |
 
 ## references 索引（按需加载，勿全量读）
 
@@ -245,6 +260,10 @@ list_pages / new_page / navigate_page / close_page ｜ take_snapshot ｜ click /
 | `references/销售报表排程.md` | 销售报表：哪些数据可定时/哪些按需索取、定时任务配置方法、脚本速查、待拍板参数 |
 | `CHANGELOG.md` | 查版本演进与历史决策 |
 
-## 运行时目录
+## 运行时目录（V1.6 起数据外置，代码与数据分离）
 
-`state/`（auth.json、db.json、mapping.json、capture-issues.jsonl、login-events.jsonl）｜ `data/raw/<日期>/<槽>/` ｜ `out/`（日报/看板/分析）——均自动创建，勿手工清理 state。
+- **代码根目录**（本 skill 目录）：只含 `SKILL.md`、`scripts/`、`config/`、`references/`——运行**不会**在此产生或修改任何数据文件
+- **数据根目录**：所有运行时数据（`state/`、`data/raw/<日期>/<槽>/`、`out/`）集中在外部数据目录，默认 `~/WorkBuddy/scm-collector-data/`（Mac/Windows 通用，`~` 自动解析为用户主目录），可用环境变量 `SCM_DATA_HOME` 覆盖
+- 目录不存在时脚本自动创建（`mkdir recursive`），首次部署零配置；`state/` 勿手工清理
+- 文档中的 `out/...`、`data/raw/...`、`state/...` 均指**数据根目录下的相对路径**，呈现产出文件时用数据根目录的绝对路径
+- 判定 skill 是否更新只看代码根目录；采集/日报的日常运行不再触碰 skill 目录

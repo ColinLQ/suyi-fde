@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 // reconcile.mjs — 每日对账：成本口径(±1元) + 入库一致性。零网络。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const rules = JSON.parse(fs.readFileSync(path.join(root, 'config', 'rules.json'), 'utf8'))['对账规则'];
-const db = JSON.parse(fs.readFileSync(path.join(root, 'state', 'db.json'), 'utf8'));
+const db = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'db.json'), 'utf8'));
 const dates = Object.keys(db.days).sort();
 const a = process.argv.find(x => x.startsWith('--date='));
 const date = a ? a.split('=')[1] : dates[dates.length - 1];
 const slots = db.days[date] || {};
 const day = slots.am || slots.pm;
-const mapping = JSON.parse(fs.readFileSync(path.join(root, 'state', 'mapping.json'), 'utf8'));
+const mapping = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'mapping.json'), 'utf8'));
 const tplMap = Object.fromEntries(mapping.pairs.map(p => [p.template_no, p.item_ref]));
 
 const out = { date, cost_diff: [], stock_diff: [], summary: {} };
@@ -37,6 +40,6 @@ out.summary = {
   quality_flag: out.cost_diff.length === 0 ? 'PASS' : `WARN(${out.cost_diff.length}款成本差异>1元)`
 };
 
-const outDir = path.join(root, 'out'); fs.mkdirSync(outDir, { recursive: true });
+const outDir = path.join(dataHome, 'out'); fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, `reconcile-${date}.json`), JSON.stringify(out, null, 1));
 console.log(`[reconcile] ${date}：成本核对 ${costChecked} 款，超差 ${out.cost_diff.length} 款；衣者入库累计 ${yzIn} 件 vs 多客在库 ${dkStock} 件 → ${out.summary.quality_flag}`);

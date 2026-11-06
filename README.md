@@ -1,7 +1,14 @@
-# scm-collector 使用说明（部署与操作手册）
+# suyi-scm-collector 使用说明（部署与操作手册）
 
 > 衣者 × 多客 数据采集与经营日报智能体技能
-> 版本 V1.0 ｜ 更新 2026-09-24 ｜ 配套文档：《PRD》《SOP》《技术方案》（见项目 docs/ 目录）
+> 版本 V1.6 ｜ 更新 2026-11-05 ｜ 配套文档：《PRD》《SOP》《技术方案》（见项目 docs/ 目录）
+
+## 运行环境与数据目录（V1.6 起必读）
+
+- **平台**：Mac / Windows 均可运行（Node ≥ 18、Python3 + openpyxl）。脚本全部动态解析路径，无需修改任何代码即可部署
+- **代码目录**：skill 安装目录（含 SKILL.md / scripts / config / references），运行不会在其中产生数据
+- **数据目录**：默认 `~/WorkBuddy/scm-collector-data/`（用户主目录下），可用环境变量 `SCM_DATA_HOME` 指定其他位置；`state/`、`data/`、`out/` 三个子目录由脚本自动创建
+- 本文档中提到的 `out/...`、`state/...`、`data/raw/...` 路径均指**数据目录**下的相对路径
 
 ---
 
@@ -33,8 +40,8 @@
 |----|------|
 | 机器 | 客户现场 Windows 专用机，**常开机不断电**（采集登录态在这台机器上） |
 | Node.js | 22+（脚本零第三方依赖，只需 Node 本体） |
-| 浏览器 | Chrome，使用**专用用户目录**（如 `D:\scm-profile`，建议带 `--remote-debugging-port=9222`；由MCP自管的浏览器亦可，端口自动发现），只跑采集不办公 |
-| 智能体 | WorkBuddy（或其他支持 Skill + chrome-devtools MCP 的智能体），已装 chrome-devtools MCP |
+| 浏览器 | **比特浏览器客户端（≥7.1.5）**，专用窗口 `suyi`（无代理直连），只跑采集不办公；客户端保持运行（Local API 54345） |
+| 智能体 | WorkBuddy（或其他支持 Skill + MCP 的智能体），已装 bitbrowser MCP |
 | 账号 | 衣者：管理账号（账号密码登录）；多客：黑端账号（手机 APP「我的→扫一扫」扫码登录） |
 
 ## 四、首次部署（照着一步步做）
@@ -46,11 +53,11 @@
 
 ### 步骤 2：放置技能目录
 
-1. 把整个 `scm-collector` 文件夹复制到现场机，例如 `D:\scm-collector`
-2. 再复制一份到 WorkBuddy 的技能目录：`C:\Users\你的用户名\.workbuddy\skills\scm-collector\`（没有 `skills` 文件夹就新建一个；确切路径以所用 WorkBuddy 版本的说明为准）
-3. 验证链路（在 `D:\scm-collector` 这份上测，命令逐行执行）：
+1. 把整个 `suyi-scm-collector` 文件夹复制到现场机，例如 `D:\suyi-scm-collector`
+2. 再复制一份到 WorkBuddy 的技能目录：`C:\Users\你的用户名\.workbuddy\skills\suyi-scm-collector\`（没有 `skills` 文件夹就新建一个；确切路径以所用 WorkBuddy 版本的说明为准）
+3. 验证链路（在 `D:\suyi-scm-collector` 这份上测，命令逐行执行）：
    ```
-   cd /d D:\scm-collector
+   cd /d D:\suyi-scm-collector
    node scripts\mock-capture.mjs --slot am
    node scripts\ingest.mjs --slot am
    node scripts\match-template-no.mjs
@@ -60,26 +67,31 @@
    ```
    在 `out\` 里看到今天的「日报-….md」即链路正常。这是模拟数据自测，测完把 `data\`、`state\`、`out\` 三个文件夹删掉，从干净状态开始正式使用
 
-### 步骤 3：创建专用 Chrome 并登录两个系统
+### 步骤 3：安装比特浏览器、建采集窗口并登录两个系统
 
-1. 桌面右键 → 新建 → 快捷方式，位置填下面这行（引号照抄，参数写在引号外面；Chrome 装在其他位置就改前半段路径）：
+1. 安装比特浏览器客户端（≥7.1.5，https://www.bitbrowser.cn ），注册/登录后保持运行
+2. 客户端里创建浏览器窗口：名称填 **`suyi`**（精确一致，脚本按名定位），代理选「**不使用代理**」（noproxy 直连；严禁挂海外代理——衣者/多客会触发风控）
+3. 打开这个窗口，登录衣者：地址栏输入 `scm.yizheyun.com` → 输入账号密码登录 → 看到顶栏「员工 XXX」即成功
+4. 登录多客：地址栏输入 `air.duoke.net` → 屏幕出现二维码 → 手机打开多客 APP →「我的」页往下滑 →「扫一扫」→ 扫屏幕上的码 → 进入黑端后台即成功
+5. **从此这个窗口只跑采集**：不用它办公、绝不点「退出登录」、不复用为其他账号窗口（登录态会保留在窗口 Profile 里）
+
+### 步骤 4：配置 WorkBuddy 与比特 MCP
+
+1. 比特客户端「系统设置 → Local API」→ 开启**鉴权控制** → 复制 API Token
+2. 在 WorkBuddy 的 `mcp.json`（`C:\Users\你的用户名\.workbuddy\mcp.json`）写入（**必须在 mcpServers 字段内**）：
+   ```json
+   {
+     "mcpServers": {
+       "bitbrowser": {
+         "url": "http://127.0.0.1:54345/mcp",
+         "headers": { "x-api-key": "<粘贴你的Token>" }
+       }
+     }
+   }
    ```
-   "C:\Program Files\Google\Chrome\Application\chrome.exe" --user-data-dir=D:\scm-profile --remote-debugging-port=9222
-   ```
-2. 双击这个快捷方式——打开的是一个**全新隔离的浏览器**（和你日常用的 Chrome 互不影响），建议起名「采集浏览器」
-3. 登录衣者：地址栏输入 `scm.yizheyun.com` → 输入账号密码登录 → 看到顶栏「员工 XXX」即成功
-4. 登录多客：地址栏输入 `air.duoke.net` → 屏幕出现二维码 → 手机打开多客 APP →「我的」页往下滑 →「扫一扫」→ 扫屏幕上的码 → 电脑进入黑端后台即成功
-5. **从此这个浏览器只跑采集**：不用它办公、绝不点「退出登录」、用完直接关窗口（登录态会保留）
-
-### 步骤 4：配置 WorkBuddy 与浏览器 MCP
-
-1. 在 WorkBuddy 中安装/启用 **chrome-devtools MCP**——**让 WorkBuddy 自己拉起 MCP**（在 mcp.json 里配置），不要复用其他会话/其他工具启动的 MCP 实例：否则兜底采集的文件只能落到系统临时目录，每轮采集要额外搬运
-2. **登录态放在哪个浏览器**（二选一，都会被自动支持）：
-   - **推荐**：在 MCP 配置里给浏览器加 `--user-data-dir=D:\scm-profile`（专用Profile）和 `--remote-debugging-port=9222`（固定调试端口）——与桌面「采集浏览器」快捷方式是同一个浏览器，登录一次两边共用
-   - **省事**：什么都不配，直接让 MCP 用它自管的浏览器（Profile 会持久化）——首次对智能体说「检查登录状态」，让它打开两系统页面后**在这个浏览器里**完成登录，之后登录态一直保留
-   - 凭据收割脚本会**自动发现**浏览器调试端口（优先9222，其次扫描本机监听端口——MCP自行拉起的随机端口浏览器同样命中）；发现不了时智能体会用MCP请求文件导入兜底（见SKILL.md第1步附A）
+   然后在连接器管理页对 bitbrowser 点「信任」。Token 只此一份来源，skill 脚本自动读取该文件；比特重新生成 Token 后只需更新此文件。
 3. 确认技能已放入 skills 目录（见步骤 2）
-4. 验证：对 WorkBuddy 说 **「检查登录状态」**——智能体会执行 `node scripts\harvest-auth.mjs --check`，应回答两个系统均已登录
+4. 验证：对 WorkBuddy 说 **「检查登录状态」**——智能体会执行 `node scripts\check-login.mjs`（自动拉起窗口+校验登录态），应回答两个系统均已登录
 
 ### 步骤 5：首跑（部署首跑批次）
 
@@ -147,7 +159,7 @@ WorkBuddy 的定时任务本质是「**到点自动把一段提示词发给智�
 ### 登录失效时（会碰到，正常现象）
 
 1. 智能体在对话中提示「XX系统未登录」，本次流程已停止
-2. **你要做**：到现场机打开采集浏览器（智能体用MCP打开的那个；若配了专用Profile快捷方式就是它），完成登录（衣者账密 / 多客手机扫码）
+2. **你要做**：到现场机打开比特浏览器的 suyi 窗口（客户端「打开」；智能体跑采集时也会自动拉起该窗口），完成登录（衣者账密 / 多客手机扫码）
 3. 回来对智能体说 **「继续」**——它会重新收割凭据后从断点续采，不会重采已完成的
 4. 登录态由浏览器Profile维持，通常数天~数周失效一次；具体有效期以实测为准
 
@@ -164,7 +176,7 @@ WorkBuddy 的定时任务本质是「**到点自动把一段提示词发给智�
 ## 六、目录结构与配置
 
 ```
-scm-collector/
+suyi-scm-collector/
 ├── SKILL.md            ← 智能体执行的操作规程（铁律、批次、采集流程）
 ├── README.md           ← 本文档
 ├── scripts/
@@ -203,7 +215,7 @@ scm-collector/
 ## 七、手动执行命令（调试用）
 
 ```bash
-cd scm-collector
+cd suyi-scm-collector
 node scripts/harvest-auth.mjs --check                 # 检查两系统登录态
 node scripts/fetch-endpoints.mjs --batch evening      # 直连采集（batch可选morning/noon/evening/poll/weekly/first）
 node scripts/fetch-endpoints.mjs --batch evening --dry-run   # 只打印将发出的请求，不实际采集
@@ -224,15 +236,16 @@ node scripts/mock-capture.mjs --date 2026-09-25 --slot am   # 仅demo（槽位�
 | 提示「未登录」 | 见「登录失效」流程；**系统不会自动登录、不会绕过认证** |
 | 日报里出现「数据截至XX:XX」 | 当日有采集异常，系统降级沿用最近快照并如实标注——这是设计行为，不是故障 |
 | 数据对不上/缺项 | 查 `state/capture-issues.jsonl`（所有数据质量问题都记录在案，绝不静默丢弃） |
-| 提示「未发现任何Chrome DevTools端口」 | 浏览器没开或调试端口不可达——先对智能体说「跑采集」，它会用MCP自动打开浏览器；仍不行说明浏览器以pipe模式启动，智能体会改用MCP请求文件导入兜底（SKILL.md第1步附A） |
+| 提示「未发现任何Chrome DevTools端口」 | 比特客户端未运行或采集窗口未拉起——启动比特客户端后对智能体说「跑采集」（脚本自动拉起 suyi 窗口）；仍不行按 SKILL.md 采集兜底.md 附A五步排查 |
+| 比特报「token 失效/Login out」 | 比特客户端「系统设置→Local API」重新复制 Token，更新 mcp.json 的 bitbrowser.headers.x-api-key |
 | 个别接口直连失败 | 自动记入 capture-issues 并继续其余端点，日报披露缺项；智能体按报错自愈更新 `endpoints.json` 后下轮恢复 |
-| 直连整系统失败（批量报错/改版） | 智能体自动回落浏览器UI采集保日报，同时探查新接口自愈更新 `endpoints.json`（变更记入 `_comment`） |
+| 直连整系统失败（批量报错/改版） | 智能体自动回落浏览器UI采集（cdp-eval）保日报，同时探查新接口自愈更新 `endpoints.json`（变更记入 `_comment`） |
 | 想看模拟效果 | 明确说「demo」或「模拟数据」才会触发，产物自动隔离到 `_quarantine_mock/`，不会污染真实数据 |
 
 ## 九、红线（违反会破坏整个设计）
 
 1. **直连仅限只读查询**——脚本只调用 `endpoints.json` 注册的查询类接口；保存/新建/删除/导入导出类接口与按钮**一律禁止**（导出按钮同样不许点）
 2. **只读红线（含页内脚本）**——evaluate_script 等页内脚本已于 2026-09-25 解禁、可自由用于翻页/取数等方便用途；但保存/删除/导出/提交类写操作，无论 UI 点击还是脚本执行，一律禁止
-3. **不自动登录、不绕过认证、不存储账号密码**——登录态完全由专用浏览器 Profile 维持；直连用的会话凭据（token/key）只从浏览器实时收割、只缓存在本机 `state/auth.json`（限12小时）、不外传
-4. 专用 Chrome **不得用于日常办公**（防单点登录互踢）
+3. **不自动登录、不绕过认证、不存储账号密码**——登录态完全由比特浏览器 suyi 窗口 Profile 维持；直连用的会话凭据（token/key）只从窗口实时收割、只缓存在本机 `state/auth.json`（限12小时）、不外传
+4. 采集窗口**不得用于日常办公**、不登录其他账号（防单点登录互踢）；严禁复用比特里其他代理窗口采 collect 两系统
 5. 现场机**保持开机**——快照漏一天就缺一天（历史库存从部署日起累积）

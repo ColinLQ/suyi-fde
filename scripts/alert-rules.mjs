@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // alert-rules.mjs — 补货预警 + 超期红号。规则参数读取 config/rules.json。零网络。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const rules = JSON.parse(fs.readFileSync(path.join(root, 'config', 'rules.json'), 'utf8'));
 const R = rules['补货预警'];
-const db = JSON.parse(fs.readFileSync(path.join(root, 'state', 'db.json'), 'utf8'));
+const db = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'db.json'), 'utf8'));
 const dates = Object.keys(db.days).sort();
 const date = args_date();
 function args_date() {
@@ -59,7 +62,7 @@ const byStep = {};
 out.overdue_orders.forEach(o => (byStep[o.step] = (byStep[o.step] || 0) + 1));
 out.overdue_summary = byStep;
 
-const outDir = path.join(root, 'out'); fs.mkdirSync(outDir, { recursive: true });
+const outDir = path.join(dataHome, 'out'); fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, `alerts-${date}.json`), JSON.stringify(out, null, 1));
 console.log(`[alert] ${date}：补货预警 ${out.restock_alerts.length} 款（紧急 ${out.restock_alerts.filter(a => a.level.includes('紧急')).length}）；超期订单 ${out.overdue_orders.length} 单`);
 console.log(`[alert] 超期分布：${JSON.stringify(byStep)}`);

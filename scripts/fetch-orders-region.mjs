@@ -3,10 +3,13 @@
 // 复用 fetch-endpoints.mjs 的凭据收割与请求构造逻辑（只读查询接口 order/new_view_all，遵守只读红线）。
 // 用法：node scripts/fetch-orders-region.mjs [--days 30] [--out data/raw/2026-09-28/am/duoke_orders_30d.jsonl]
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { harvestAuth } from './harvest-auth.mjs';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -21,7 +24,7 @@ const fmt = dt => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '
 const dayOff = n => { const dt = new Date(today); dt.setDate(dt.getDate() + n); return fmt(dt); };
 const sday = dayOff(-(days - 1));
 const eday = dayOff(0);
-const outPath = args.out || path.join(root, 'data', 'raw', '2026-09-28', 'am', `duoke_orders_${days}d.jsonl`);
+const outPath = args.out || path.join(dataHome, 'data', 'raw', '2026-09-28', 'am', `duoke_orders_${days}d.jsonl`);
 const timeoutMs = 30000;
 
 // —— 凭据：实时收割优先，回落缓存（12h内有效） ——
@@ -32,7 +35,7 @@ const h = await harvestAuth({}).catch(() => ({}));
 if (h.duoke?.ok) auth = { creds: h.duoke.creds, from: '实时收割' };
 if (!auth) {
   try {
-    const cache = JSON.parse(fs.readFileSync(path.join(root, 'state', 'auth.json'), 'utf8'));
+    const cache = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'auth.json'), 'utf8'));
     const fresh = (Date.now() - new Date(cache.harvested_at).getTime()) < cacheHours * 3600e3;
     if (fresh && cache.duoke?.ok) auth = { creds: cache.duoke.creds, from: `缓存(${cache.harvested_at})` };
   } catch {}

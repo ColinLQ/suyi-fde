@@ -2,8 +2,9 @@
 # 终修: sheet编号重排(按原逻辑顺序)
 import openpyxl
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-TODAY = "2026-10-10"
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 
 ORDER = {
     "生产部": ["周滚动补货计划", "在产订单驾驶舱", "碎片返单代价明细", "工厂计分卡·全量", "返单节奏明细", "补货建议V2"],
@@ -12,7 +13,7 @@ ORDER = {
 }
 
 for dept, keys in ORDER.items():
-    wb = openpyxl.load_workbook(f"{SKILL}/out/数据包-{dept}-{TODAY}.xlsx")
+    wb = openpyxl.load_workbook(f"{DATA_HOME}/out/数据包-{dept}-{TODAY}.xlsx")
     # 当前实际顺序
     cur = list(wb.sheetnames)
     # 目标顺序: 按keys匹配
@@ -35,6 +36,6 @@ for dept, keys in ORDER.items():
         wb[s].title = tmp_map[s]
     for i, s in enumerate(target):
         wb[tmp_map[s]].title = f"{i+1:02d}·" + tmp_map[s].split("|", 1)[1]
-    wb.save(f"{SKILL}/out/数据包-{dept}-{TODAY}.xlsx")
+    wb.save(f"{DATA_HOME}/out/数据包-{dept}-{TODAY}.xlsx")
     print(f"{dept}: {[s[:16] for s in wb.sheetnames]}")
 print("✅ 编号已重排")

@@ -2,9 +2,7 @@
 # 生产部数据包 V4 重造：每张表回答一个决策问题（产品经理视角）
 # 04表: 返单碎片化 → 拆成「碎片单代价明细」(每款: 多花的钱/多等的天/怎么避免)
 # 全部表格: 表尾附口径说明块
-import os
-import json
-from pathlib import Path
+import json, os
 from datetime import datetime, timedelta
 from collections import defaultdict
 import openpyxl
@@ -35,11 +33,12 @@ al_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
 al_r = Alignment(horizontal="right", vertical="center")
 al_note = Alignment(horizontal="left", vertical="top", wrap_text=True)
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-RAW = f"{SKILL}/data/raw/2026-10-09/pm"
-RAW_T = f"{SKILL}/data/raw/2026-10-10/pm"
-OUTDIR = f"{SKILL}/out"
-PIC = f"{SKILL}/state/goods-pics"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+RAW = f"{DATA_HOME}/data/raw/2026-10-09/pm"
+RAW_T = f"{DATA_HOME}/data/raw/2026-10-10/pm"
+OUTDIR = f"{DATA_HOME}/out"
+PIC = f"{DATA_HOME}/state/goods-pics"
 TODAY = "2026-10-10"
 NOW = datetime(2026, 10, 10)
 
@@ -164,7 +163,7 @@ for tno, lst in tpl_orders.items():
     })
 frag.sort(key=lambda x: -(x["overspend"] or 0))
 
-wb = openpyxl.load_workbook(f"{SKILL}/out/数据包-生产部-{TODAY}.xlsx")
+wb = openpyxl.load_workbook(f"{DATA_HOME}/out/数据包-生产部-{TODAY}.xlsx")
 
 # ============================================================
 # 重造 04: 碎片单代价明细
@@ -275,7 +274,7 @@ notes_map = {
         "▍按时率口径同03表(完成≤ETA,仅统计填了ETA的批)。ETA未填率过半时,按时率仅代表「填了ETA的那部分批」——所以两列要一起看。",
         "▍均加工价(price字段均值): 远方¥14/件 vs 恒生¥32.4/件——差价2.3倍。爆款返单从高价厂切到低价厂是直接的降本动作(前提: 交期质量可比,建议先切1-2款试单)。",
         "▍平均周期=下单→最后出货的天数均值(排除>120天异常)。",
-        "▍主力跟单: 华哥名下超1,700批——人的单点风险,新跟单应逐步分单。",
+        "▍主力跟单: 生产经理名下超1,700批——人的单点风险,新跟单应逐步分单。",
     ],
     "06·返单节奏明细·下单≥3次(同日合并)": [
         "▍这张表回答什么：哪些款在反复补货,节奏多密——并单机制的目标清单。",
@@ -312,5 +311,5 @@ for sn, lines in notes_map.items():
     write_note_block(ws, r, min(ws.max_column, 12), lines)
     print(f"  {target[:10]}: 口径说明已附")
 
-wb.save(f"{SKILL}/out/数据包-生产部-{TODAY}.xlsx")
+wb.save(f"{DATA_HOME}/out/数据包-生产部-{TODAY}.xlsx")
 print("✅ 生产部 V4 完成")

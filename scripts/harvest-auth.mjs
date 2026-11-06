@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // harvest-auth.mjs — 直连采集凭据收割器（2026-09-24用户批准解除直连禁令后新增；2026-09-25补端口自动发现；
-// 2026-09-25用户批准解除代码注入禁令，收割改为 Runtime.evaluate 直读 localStorage 快路径优先）。
-// 经CDP附加到采集浏览器（chrome-devtools MCP 拉起的浏览器或专用Chrome均可）：
+// 2026-09-25用户批准解除代码注入禁令，收割改为 Runtime.evaluate 直读 localStorage 快路径优先；
+// 2026-11-05 V1.8 端口发现前置比特浏览器分支：优先经 bit.mjs 拿专用采集窗口(scm-collector)的 CDP 端口，
+//   比特客户端不在线/窗口缺失时回落原 netstat 全端口扫描——兼容旧chrome-devtools MCP自启浏览器形态）。
+// 经CDP附加到采集浏览器（比特浏览器窗口或任何带调试端口的Chromium）：
 //   快路径：Runtime.evaluate 直读页面 localStorage/sessionStorage，瞬时取得凭据；
 //   回落：Network域被动监听浏览器自己发出的请求 + Page域导航触发（storage为空/结构变化时）。
 // 端口发现：指定端口可达且已开两系统页面 → 直接采用、跳过扫描（日常单浏览器场景零浪费）；
@@ -15,13 +17,16 @@
 //   --check：收割成功后各发一个只读探测请求验证登录态（衣者 get_user_info / 多客 admin_get_staff_list）
 // 输出：末行打印JSON摘要；两系统均未收割到凭据时退出码1
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 const run = promisify(execFile);
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -52,6 +57,12 @@ const SYSTEMS = {
       };
       Object.values(dump.ls || {}).forEach(visit);
       Object.values(dump.ss || {}).forEach(visit);
+      if (creds && !creds.v) {
+        // V1.9.4 实测（2026-11-05 衣者前端改版）：tokenInfo 瘦身为 {token,uid,cid}，v 移到 ls['version']（前端构建hash）、cv 固定 '4.18.0'——
+        // v 缺失直连必报 code=201「检测到有新版本，请重新登录」。浏览器真实请求体已验证：v=version键值，cv=4.18.0。
+        creds.v = (dump.ls && dump.ls.version) || creds.v || '';
+        creds.cv = creds.cv || '4.18.0';
+      }
       return creds;
     },
     extract: async (cand, send) => {
@@ -111,8 +122,26 @@ const probePort = async p => {
     return j && (j.webSocketDebuggerUrl || j.Browser) ? p : null;
   } catch { return null; }
 };
-async function discoverPorts(hint) {
+async function discoverPorts(hint, opts = {}) {
   const found = [];
+  // —— 比特浏览器分支（V1.8 前置）：专用采集窗口在线即直接采用，跳过全端口扫描 ——
+  try {
+    const { getCollectorWindow } = await import('./bit.mjs');
+    const win = await getCollectorWindow({ open: true }); // 幂等：已开返回现有端口，未开则拉起
+    if (win?.http && await probePort(Number(String(win.http).split(':').pop()))) {
+      const p = Number(String(win.http).split(':').pop());
+      try {
+        const tabs = await listTabs(p);
+        if (tabs.some(t => t.url.includes(SYSTEMS.yizhe.tabMatch)) && tabs.some(t => t.url.includes(SYSTEMS.duoke.tabMatch))) {
+          if (opts.verbose) console.log(`  [harvest] 采用比特采集窗口 ${win.name}（CDP ${p}）`);
+          return [p];
+        }
+      } catch {}
+      found.push(p);
+    }
+  } catch (e) {
+    if (opts.verbose) console.log(`  [harvest] 比特分支未命中（${String(e.message).slice(0, 80)}），回落端口扫描`);
+  }
   if (hint && await probePort(hint)) {
     // 快路径：hint端口已打开两系统页面 → 就是日常唯一的采集浏览器，直接采用、跳过全端口扫描（省netstat+逐端口探测）
     try {
@@ -202,12 +231,12 @@ async function harvestSystem(sysKey, cfg, ports) {
 // 供 fetch-endpoints.mjs 调用（每次采集前实时收割，避免陈旧凭据）
 export async function harvestAuth(opts = {}) {
   const hint = Number(opts.port || port);
-  const ports = await discoverPorts(hint);
+  const ports = await discoverPorts(hint, opts);
   const [yizhe, duoke] = await Promise.all([harvestSystem('yizhe', SYSTEMS.yizhe, ports), harvestSystem('duoke', SYSTEMS.duoke, ports)]);
   const out = { yizhe, duoke, ports, harvested_at: new Date().toISOString() };
   if (yizhe.ok || duoke.ok) {
-    fs.mkdirSync(path.join(root, 'state'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'state', 'auth.json'), JSON.stringify(out, null, 2));
+    fs.mkdirSync(path.join(dataHome, 'state'), { recursive: true });
+    fs.writeFileSync(path.join(dataHome, 'state', 'auth.json'), JSON.stringify(out, null, 2));
   }
   return out;
 }
@@ -272,12 +301,12 @@ async function main() {
     const creds = importCreds(t);
     const result = { yizhe: creds.yizhe ? { ok: true, creds: creds.yizhe } : { ok: false, reason: '请求文件中未发现衣者token' }, duoke: creds.duoke ? { ok: true, creds: creds.duoke } : { ok: false, reason: '请求文件中未发现多客key' }, harvested_at: new Date().toISOString() };
     if (creds.yizhe || creds.duoke) {
-      fs.mkdirSync(path.join(root, 'state'), { recursive: true });
-      fs.writeFileSync(path.join(root, 'state', 'auth.json'), JSON.stringify(result, null, 2));
+      fs.mkdirSync(path.join(dataHome, 'state'), { recursive: true });
+      fs.writeFileSync(path.join(dataHome, 'state', 'auth.json'), JSON.stringify(result, null, 2));
     }
     console.log(`  衣者：${creds.yizhe ? '✓ 已从请求文件导入token' : '✗ ' + result.yizhe.reason}`);
     console.log(`  多客：${creds.duoke ? '✓ 已从请求文件导入key' : '✗ ' + result.duoke.reason}`);
-    console.log(JSON.stringify({ yizhe: { ok: !!creds.yizhe }, duoke: { ok: !!creds.duoke }, auth_file: creds.yizhe || creds.duoke ? path.join(root, 'state', 'auth.json') : null }));
+    console.log(JSON.stringify({ yizhe: { ok: !!creds.yizhe }, duoke: { ok: !!creds.duoke }, auth_file: creds.yizhe || creds.duoke ? path.join(dataHome, 'state', 'auth.json') : null }));
     process.exit(creds.yizhe || creds.duoke ? 0 : 1);
   }
   console.log(`[harvest-auth] 自动发现采集浏览器DevTools端口（优先${port}，其次扫描本机监听端口）…`);
@@ -290,7 +319,7 @@ async function main() {
   }
   if (args.check && r.yizhe.ok) { const p = await probe({ sysKey: 'yizhe', creds: r.yizhe.creds }); summary.yizhe.check = p; console.log(`  衣者登录探测：${p.ok ? '✓ ' + p.msg : '✗ ' + p.msg}`); }
   if (args.check && r.duoke.ok) { const p = await probe({ sysKey: 'duoke', creds: r.duoke.creds }); summary.duoke.check = p; console.log(`  多客登录探测：${p.ok ? '✓ ' + p.msg : '✗ ' + p.msg}`); }
-  summary.auth_file = r.yizhe.ok || r.duoke.ok ? path.join(root, 'state', 'auth.json') : null;
+  summary.auth_file = r.yizhe.ok || r.duoke.ok ? path.join(dataHome, 'state', 'auth.json') : null;
   console.log(JSON.stringify(summary));
   process.exit(r.yizhe.ok || r.duoke.ok ? 0 : 1);
 }

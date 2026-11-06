@@ -2,13 +2,16 @@
 // 审计：合并账户对客户数指标的影响 + 生成完整证据表
 import fs from 'node:fs';
 import path from 'node:path';
-const SKILL = path.resolve(import.meta.dirname, '..');
-const PM = path.join(SKILL, 'data/raw/2026-10-09/pm');
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const PM = path.join(dataHome, 'data/raw/2026-10-09/pm');
 const rl = f => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
 
 const customers = rl(path.join(PM, 'duoke_customers.jsonl'));
 const orders = rl(path.join(PM, 'duoke_orders_hist3y.jsonl'));
-const G = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/customer-merge-groups.json'), 'utf8'));
+const G = JSON.parse(fs.readFileSync(path.join(dataHome, 'state/customer-merge-groups.json'), 'utf8'));
 
 const cid2g = new Map();
 G.groups.forEach((g, i) => g.ids.forEach(id => cid2g.set(String(id), 'G' + i)));
@@ -68,7 +71,7 @@ lastOf.forEach((t, g2) => { if ((NOW - t) / 86400 >= 30 && (NOW - t) / 86400 < 7
 console.log(`流失名单(30天-2年): ${dormantRaw} -> ${dormantMerged}（差 ${dormantRaw - dormantMerged}）`);
 
 // ---- 输出完整证据表 ----
-const lines = ['# 客户账户合并审计表（供柳红核对）', '',
+const lines = ['# 客户账户合并审计表（供销售负责人核对）', '',
   `构建时间：${new Date().toISOString()}`, `规则：A 归一化同名合并（去括号/空格/分隔符）+ B 同手机号合并；并查集聚类`,
   `有效下单客户 ${totalActiveRaw} 户（原始账户）→ 合并后 ${totalActiveMerged} 户；合并组 ${G.groups.length} 组（涉及 ${G.groups.reduce((s, g) => s + g.ids.length, 0)} 个账户）`, '',
   '> 用法：业务同事按此表核对。确认同人的保留合并；确认不同人的（如两个同名档口不同老板），告诉我组号，我将其拆开重算。', '',
@@ -77,5 +80,5 @@ G.groups.forEach((g, i) => {
   lines.push(`| G${i} | ${g.ids.join('、')} | ${g.names.join(' / ')} | ${g.phones.join('、') || '-'} | ${g.sameName ? '是' : '否'} | ${g.refInter ?? '-'} |`);
 });
 lines.push('');
-fs.writeFileSync(path.join(SKILL, 'out/客户账户合并审计表-2026-10-10.md'), lines.join('\n'));
+fs.writeFileSync(path.join(dataHome, 'out/客户账户合并审计表-2026-10-10.md'), lines.join('\n'));
 console.log('audit table -> out/客户账户合并审计表-2026-10-10.md');

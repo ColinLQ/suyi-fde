@@ -6,13 +6,16 @@
 //   ③ 只读——仅点击分页/筛选控件，永不点击保存/删除/导出类按钮（无论UI点击还是脚本执行）
 //   ④ 本脚本不向源系统发起任何HTTP请求——数据全部来自本浏览器 Network 事件的响应体（浏览器是唯一数据通道）
 // 用法：node scripts/capture-pages.mjs --api <接口URL片段> --file <输出jsonl路径> --list-path <行数组路径，如 data.list>
-//        [--match-url <当前标签页URL片段>] [--max-pages 50] [--port 9222] [--interval 1500] [--selector <css选择器>]
-// 前置：Chrome 以 --remote-debugging-port=<port> 启动（与MCP同一浏览器）；第1页由智能体收割后调用本脚本续采2..N页
-// 输出：最后一行打印JSON摘要 {"ok":true,"pages":N,"rows":M,"reason":"..."} 供智能体核对；失败退出码1，智能体回落纯MCP逐页收割
+//        [--match-url <当前标签页URL片段>] [--max-pages 50] [--interval 1500] [--selector <css选择器>]
+// 前置（V1.9.2）：默认经比特采集窗口(suyi)自动发现端口（scripts/bit.mjs，动态端口）；仍兼容 --port 9222 手动指定。
+// 第1页由智能体收割后调用本脚本续采2..N页
+// 输出：最后一行打印JSON摘要 {"ok":true,"pages":N,"rows":M,"reason":"..."} 供智能体核对；失败退出码1，智能体回落cdp-eval逐页收割
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -23,7 +26,6 @@ for (let i = 0; i < argv.length; i++) {
 }
 const api = args.api, listPath = args['list-path'] || 'data.list';
 const maxPages = Number(args['max-pages'] || 50);
-const port = Number(args.port || 9222);
 const interval = Number(args.interval || 1500);
 const matchUrl = args['match-url'] || '';
 const selectors = args.selector ? [args.selector] : [
@@ -36,13 +38,26 @@ if (!args.api || !args.file) { console.error('[capture-pages] 缺少 --api 或 -
 const outPath = path.isAbsolute(args.file) ? args.file : path.join(root, args.file);
 fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
+// —— 定位调试端口（V1.9.2）：默认走比特采集窗口动态发现；--port 显式指定时直用 ——
+let port = Number(args.port || 0);
+if (!port) {
+  try {
+    const { getCollectorWindow } = await import('./bit.mjs');
+    const win = await getCollectorWindow({ open: true });
+    port = Number(String(win.http).split(':').pop());
+  } catch (e) {
+    console.error(JSON.stringify({ ok: false, error: `比特采集窗口不可用：${e.message}（也可用 --port 手动指定已运行的调试端口）` }));
+    process.exit(1);
+  }
+}
+
 // —— 连接调试端口，定位目标标签页 ——
 let page;
 try {
   const tabs = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
   page = tabs.filter(p => p.type === 'page' && (!matchUrl || p.url.includes(matchUrl)))[0];
 } catch (e) {
-  console.error(JSON.stringify({ ok: false, error: `连不上调试端口 ${port}（Chrome需以 --remote-debugging-port=${port} 启动）：${e.message}` }));
+  console.error(JSON.stringify({ ok: false, error: `连不上调试端口 ${port}：${e.message}` }));
   process.exit(1);
 }
 if (!page) { console.error(JSON.stringify({ ok: false, error: `找不到匹配标签页（match-url=${matchUrl || '任意'}）` })); process.exit(1); }

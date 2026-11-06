@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # 财务05表重造: 碎片补单成本 → 逐款亏损明细 + 整改追踪表
-import os
-import json
-from pathlib import Path
+import json, os
 from datetime import datetime
 from collections import defaultdict
 import openpyxl
@@ -31,9 +29,10 @@ al_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
 al_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
 al_r = Alignment(horizontal="right", vertical="center")
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-OUTDIR = f"{SKILL}/out"
-PIC = f"{SKILL}/state/goods-pics"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+OUTDIR = f"{DATA_HOME}/out"
+PIC = f"{DATA_HOME}/state/goods-pics"
 TODAY = "2026-10-10"
 
 def num(v, d=0):
@@ -61,7 +60,7 @@ def add_pic(ws, r, col, ref):
 
 # 款名/品类(从商品档案)
 goods_meta = {}
-with open(f"{SKILL}/data/raw/2026-10-09/pm/duoke_goods.jsonl", encoding="utf-8") as f:
+with open(f"{DATA_HOME}/data/raw/2026-10-09/pm/duoke_goods.jsonl", encoding="utf-8") as f:
     for line in f:
         g = json.loads(line)
         ref = str(g.get("item_ref") or "")
@@ -157,7 +156,7 @@ r += 1
 restock = json.load(open(f"{OUTDIR}/restock-deep-2026-10-09.json", encoding="utf-8"))
 # 件单价:从明细实收
 price_map = {}
-with open(f"{SKILL}/data/raw/2026-10-09/pm/duoke_order_details.jsonl", encoding="utf-8") as f:
+with open(f"{DATA_HOME}/data/raw/2026-10-09/pm/duoke_order_details.jsonl", encoding="utf-8") as f:
     psum, qsum = defaultdict(float), defaultdict(float)
     for line in f:
         d = json.loads(line)

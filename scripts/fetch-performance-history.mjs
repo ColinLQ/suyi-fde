@@ -5,20 +5,23 @@
 //   跟单 status 3=已完成（2779）；入库 stockin_status 3=全部入库（4285）
 // 落盘 data/raw/2026-10-10/pm/perf_*.jsonl，供 build-performance-report.mjs 消费。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 import { harvestAuth } from './harvest-auth.mjs';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 // 输出目录：固定沿用已有 perf 基础目录（存在则复用，否则按当天新建）——可移植
-const legacy = path.join(root, 'data', 'raw', '2026-10-10', 'pm');
+const legacy = path.join(dataHome, 'data', 'raw', '2026-10-10', 'pm');
 let outDir = legacy;
 if (!fs.existsSync(path.join(legacy, 'perf_purchase_all.jsonl'))) {
   // 找已有 perf 目录，无则当天新建
   const hits = [];
   const walk = d => { try { fs.readdirSync(d, { withFileTypes: true }).forEach(e => { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (e.name === 'perf_purchase_all.jsonl') hits.push(path.dirname(p)); }); } catch {} };
-  walk(path.join(root, 'data', 'raw'));
+  walk(path.join(dataHome, 'data', 'raw'));
   if (hits.length) { hits.sort((a, b) => fs.statSync(path.join(b, 'perf_purchase_all.jsonl')).mtimeMs - fs.statSync(path.join(a, 'perf_purchase_all.jsonl')).mtimeMs); outDir = hits[0]; }
-  else outDir = path.join(root, 'data', 'raw', new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' }), 'pm');
+  else outDir = path.join(dataHome, 'data', 'raw', new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' }), 'pm');
 }
 fs.mkdirSync(outDir, { recursive: true });
 const timeoutMs = 30000;
@@ -30,7 +33,7 @@ const h = await harvestAuth({}).catch(() => ({}));
 if (h.yizhe?.ok) auth = h.yizhe.creds;
 if (!auth) {
   try {
-    const cache = JSON.parse(fs.readFileSync(path.join(root, 'state', 'auth.json'), 'utf8'));
+    const cache = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'auth.json'), 'utf8'));
     if (cache.yizhe?.ok) auth = cache.yizhe.creds;
   } catch {}
 }

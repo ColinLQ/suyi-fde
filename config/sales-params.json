@@ -1,12 +1,30 @@
 {
-  "_comment": "销售报表参数（柳红/系统方拍板后改这里，报表自动生效）。2026-10-10 建",
-  "internal_accounts": ["泉州刻为", "清货", "版衣特卖", "特卖会", "零售客户", "公司订单", "BSJ", "自留", "工厂报废", "仓库清货"],
-  "internal_note": "疑似内部/特殊账户名单——确认后报表将其从客户榜剔除（当前仅标注不剔除）",
+  "_comment": "销售报表参数模板。敏感项(内部账户清单)已脱敏；部署时把真实值放到数据目录 config-local/sales-params.local.json 即自动覆盖。",
+  "internal_accounts": [
+    "<内部账户1>",
+    "<内部账户2>",
+    "<工厂主体>",
+    "<特卖账户>"
+  ],
+  "internal_note": "占位模板——真实清单在 <数据根目录>/config-local/sales-params.local.json（不入git）。脚本运行时优先读本地文件。",
   "stock_warn_line": 50,
   "sell_through_warn_line": null,
   "hot_item_week_line": 0.5,
-  "vip_name_map": { "1": "普通", "2": "B类", "3": "A类", "4": "C类" },
+  "vip_name_map": {
+    "1": "普通",
+    "2": "B类",
+    "3": "A类",
+    "4": "C类"
+  },
   "vip_name_confirmed": false,
-  "dormant_tiers_days": [30, 60, 365, 730],
-  "current_season": { "year": "2026年", "season": "冬季" }
+  "dormant_tiers_days": [
+    30,
+    60,
+    365,
+    730
+  ],
+  "current_season": {
+    "year": "2026年",
+    "season": "冬季"
+  }
 }

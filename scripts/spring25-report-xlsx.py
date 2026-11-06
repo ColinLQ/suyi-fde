@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 # 2025春季复盘 Excel 明细生成 V2 —— 图片直接内嵌显示（非URL链接）
-import os, io
-import json
-from pathlib import Path
+import json, os, io
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-import sys
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 YEAR = '2025'
 for i, a in enumerate(sys.argv):
     if a == '--year' and i + 1 < len(sys.argv): YEAR = sys.argv[i + 1]
-R = json.load(open(f'{SKILL}/out/spring{YEAR[2:]}-review-data.json'))
-CACHE = f'{SKILL}/state/img-cache'
+R = json.load(open(f'{DATA_HOME}/out/spring{YEAR[2:]}-review-data.json'))
+CACHE = f'{DATA_HOME}/state/img-cache'
 
 # ---- 图片工具：下载缓存 → 居中裁方 → 缩至64×64 PNG → openpyxl 内嵌 ----
 def make_thumb(url):
@@ -162,7 +160,7 @@ w = wb.create_sheet('退货款TOP10')
 rows = [[i + 1, x['ref'], x['name'], x['cat'], '', x['qty'], x['retQty']] for i, x in enumerate(R['returnTop10'])]
 sheet_with_imgs(w, '退货TOP10', ['排名', '款号', '品名', '品类', '图片', '净销量', '退货量'], rows, [6, 12, 24, 10, 10, 11, 10], img_col=5, items=[x['img'] for x in R['returnTop10']])
 
-out = f'{SKILL}/out/{YEAR}春季复盘-数据明细.xlsx'
+out = f'{DATA_HOME}/out/{YEAR}春季复盘-数据明细.xlsx'
 wb.save(out)
 nimg = sum(len(ws._images) for ws in wb.worksheets)
 print('Excel V2 完成:', out, os.path.getsize(out) // 1024, 'KB | sheets:', len(wb.sheetnames), '| 内嵌图片:', nimg)

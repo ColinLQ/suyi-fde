@@ -2,8 +2,11 @@
 // 销售数据看板 V2：读报告JSON渲染
 import fs from 'node:fs';
 import path from 'node:path';
-const SKILL = path.resolve(import.meta.dirname, '..');
-const J = JSON.parse(fs.readFileSync(path.join(SKILL, 'out/销售数据报告-2026-10-10.json'), 'utf8'));
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const J = JSON.parse(fs.readFileSync(path.join(dataHome, 'out/销售数据报告-2026-10-10.json'), 'utf8'));
 const money = n => Math.round(n || 0).toLocaleString('zh-CN');
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\|/g, '/');
 const f1 = n => (n || 0).toFixed(1);
@@ -47,7 +50,7 @@ const html = `<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>销售数据看板 V2（柳红修正口径）</h1>
+<h1>销售数据看板 V2（销售负责人修正口径）</h1>
 <div class="meta">取数 2026-10-10 11:00 ｜ 多客 3 年 50,731 单全量明细 + 客户 17,186 家 + 实时库存 4,248 款 ｜ 当年当季=2026年·冬季<br>
 口径：客单价=购买金额÷购买单数（退单不计）；连带=件数÷购买单数；补单金额=老客（非首单）下单金额；新客=3年全历史首次下单</div>
 
@@ -113,9 +116,9 @@ ${table(['类型','款号','款名','实时库存','近7日销量','近30日销�
 <div class="note">仅统计当年当季（2026年·冬季）。欠货=负库存（预售），按近30日销量排序=补货紧迫度。</div>
 </section>
 
-<div class="note">⚠️ 待拍板：售罄预警阈值 / 库存告急线 / ABCD-vip 对应 / 内部账户剔除清单（泉州刻为、清货、版衣特卖等仍在中，JSON 可先行过滤）。</div>
+<div class="note">⚠️ 待拍板：售罄预警阈值 / 库存告急线 / ABCD-vip 对应 / 内部账户剔除清单（工厂主体、清货、特卖账户等仍在中，JSON 可先行过滤）。</div>
 </body>
 </html>`;
-const out = path.join(SKILL, 'out/销售数据看板-2026-10-10.html');
+const out = path.join(dataHome, 'out/销售数据看板-2026-10-10.html');
 fs.writeFileSync(out, html);
 console.log('DASHBOARD V2 ->', out);

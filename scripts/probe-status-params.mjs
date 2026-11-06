@@ -2,9 +2,12 @@
 // probe-status-params.mjs — 一次性探测脚本：确认出货/采购/跟单/入库接口的状态参数与日期过滤正确形态。
 // 只读查询，遵守只读红线。探测结果打印，不落盘业务数据。
 import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { harvestAuth } from './harvest-auth.mjs';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const timeoutMs = 30000;
 
 let auth = null;
@@ -12,7 +15,7 @@ const h = await harvestAuth({}).catch(() => ({}));
 if (h.yizhe?.ok) auth = h.yizhe.creds;
 if (!auth) {
   try {
-    const cache = JSON.parse((await import('node:fs')).readFileSync(path.join(root, 'state', 'auth.json'), 'utf8'));
+    const cache = JSON.parse((await import('node:fs')).readFileSync(path.join(dataHome, 'state', 'auth.json'), 'utf8'));
     if (cache.yizhe?.ok) auth = cache.yizhe.creds;
   } catch {}
 }

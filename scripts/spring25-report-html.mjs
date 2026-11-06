@@ -2,9 +2,12 @@
 // 2025春季复盘 —— HTML报告生成（含商品图片）
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 
-const SKILL = path.resolve(import.meta.dirname, '..');
-const R = JSON.parse(fs.readFileSync(path.join(SKILL, 'out/spring25-review-data.json'), 'utf8'));
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill代码根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const R = JSON.parse(fs.readFileSync(path.join(dataHome, 'out/spring25-review-data.json'), 'utf8'));
 
 const fmt = n => (n || 0).toLocaleString('zh-CN');
 const pct = s => `${s}%`;
@@ -229,5 +232,5 @@ ${ranking(R.returnTop10, '⑬ 退货款 TOP10（按退货数量，2025春）', '
 </body>
 </html>`;
 
-fs.writeFileSync(path.join(SKILL, 'out/2025春季复盘-畅销滞销与利润.html'), html);
-console.log('HTML 生成完成:', path.join(SKILL, 'out/2025春季复盘-畅销滞销与利润.html'), (html.length / 1024).toFixed(0) + 'KB');
+fs.writeFileSync(path.join(dataHome, 'out/2025春季复盘-畅销滞销与利润.html'), html);
+console.log('HTML 生成完成:', path.join(dataHome, 'out/2025春季复盘-畅销滞销与利润.html'), (html.length / 1024).toFixed(0) + 'KB');

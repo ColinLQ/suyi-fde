@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // 批量拉取商品备注（goods/get desc字段）→ state/goods-remarks.json
-// 上市时间口径（2026-10-12 柳红）：备注里的日期优先；无备注 → 首次销售时间
+// 上市时间口径（2026-10-12 销售负责人）：备注里的日期优先；无备注 → 首次销售时间
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const SKILL = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');  // skill根目录（可移植）
-const auth = JSON.parse(fs.readFileSync(path.join(SKILL, 'state/auth.json'), 'utf8'));
+const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');  // skill根目录（可移植）
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const auth = JSON.parse(fs.readFileSync(path.join(dataHome, 'state/auth.json'), 'utf8'));
 const key = auth.duoke.creds.key;
 const HDRS = { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36', 'Referer': 'https://air.duoke.net/', 'Origin': 'https://air-web.duoke.net', 'accept-language': 'chs' };
 const rl = f => fs.readFileSync(f, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
@@ -17,7 +20,7 @@ const findGoods = () => {
     if (e.isDirectory()) walk(p);
     else if (e.name === 'duoke_goods.jsonl') hits.push(p);
   });
-  walk(path.join(SKILL, 'data/raw'));
+  walk(path.join(dataHome, 'data/raw'));
   if (!hits.length) throw new Error('未找到 duoke_goods.jsonl');
   hits.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
   return hits[0];
@@ -26,7 +29,7 @@ const goods = rl(findGoods());
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // 缓存
-const outF = path.join(SKILL, 'state/goods-remarks.json');
+const outF = path.join(dataHome, 'state/goods-remarks.json');
 const cache = fs.existsSync(outF) ? JSON.parse(fs.readFileSync(outF, 'utf8')) : {};
 
 // 日期解析：备注中找 2026.x.x / 2026-10-1 / 10月1日 / 10.1 等

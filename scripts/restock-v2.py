@@ -2,15 +2,14 @@
 # 补货建议量 V2.2 最终版
 # 因子: ①历史销量(近7/30日+生命周期曲线) ②往年同期(品类×10-11月,3年均值)
 #      ③季节×气候系数(华南主区+换季窗口) + 安全护栏
-import os
-import json
-from pathlib import Path
+import json, os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-RAW = f"{SKILL}/data/raw/2026-10-09/pm"
-OUTDIR = f"{SKILL}/out"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+RAW = f"{DATA_HOME}/data/raw/2026-10-09/pm"
+OUTDIR = f"{DATA_HOME}/out"
 TODAY = "2026-10-10"
 HORIZON = 30
 W_RECENT, W_LIFE, W_YOY = 0.5, 0.3, 0.2

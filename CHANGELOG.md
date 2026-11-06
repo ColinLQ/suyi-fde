@@ -1,15 +1,56 @@
-# scm-collector 版本演进
+# suyi-scm-collector 版本演进
 
-## V2.4（2026-11-04）绩效分析与提成计算链路 + 商品图片
-- 新增**绩效分析月报链路**（与经营日报/销售报表/生产监控并列的第四条链路）：
-  - 采集：probe-status-params.mjs（探测状态枚举：采购 buy_status=3=完成、跟单 status=3=已完成、入库 stockin_status=3=全部入库、出货记录 created_at 需数组格式）→ fetch-performance-history.mjs（四岗位全量历史回捞）→ fetch-cost-month.mjs（财务对账-按订单核对：预计单件成本/按裁货/按入库实际成本）
-  - 计算：build-performance-report.mjs（统计月/快照日参数化）→ build-cost-report.py（采购员成本核算：有效性过滤——采购未录价/单价缺失/偏差>50% 剔除入异常清单）→ build-perf-excel.py（14+ sheet Excel：四岗位汇总/明细+成本三表+工厂透视，每表底部口径说明区，统计月参数化）
-  - 口径要点：落月一律按业务发生时间；出货批次≠订单数；超时分级=准时/超1-2天/超3-5天/超5天以上；延误归因（主料到厂晚于预计出货=采购段，否则生产段）；成本差额=实际−预计（不可拆采购/加工段，系统无预计分项）
-- 新增**商品图片嵌入**：fetch-perf-goods-pics.mjs（报表款→get_goods_detail 取 hash→CDN 缩略图）+ build-perf-excel.py 表尾"图片"列（openpyxl 嵌图，锚定单元格）；款号三级匹配：原样→全角横线归一→去客户后缀纯款号
-- 商品档案增量刷新：fetch-goods-refresh.mjs（多客 goods 宽窗口全量翻页）
-- 对账工具：verify-stockout-202609.mjs（出货数多口径核对：批次/订单/创建月/完成月四定义分解差异）
-- config：endpoints-sep*.json（季度趋势端点试验配置）、production-params.json（生产监控参数外置）、rules.json 更新直连采集参数
-- 脱敏化改造（本次入库同步）：全脚本个人绝对路径改为 skill 根自解析（Path(__file__) / import.meta.dirname）；多客 CDN 租户ID改 user_TENANT 占位符；真实款号/工厂名/对账快照数从注释与说明文本移除；统计月、快照日改为命令行参数
+## V1.9.5（2026-11-05 真实链路测试 + 衣者前端改版自愈）
+- **全链路真实数据测试通过**：check-login（双✓）→ 直连采集 morning+poll 批次 13 端点全成功（衣者+多客）→ ingest 入库 SKU 17526 条 → match/alert/reconcile/report 全链跑通 → 产出日报md/五部门txt/看板html。改版后路径、动态端口、凭据收割、数据外置全部正常。
+- **关键修复：衣者前端改版适配**（v/cv 来源变更）。现象：check-login 判已登录但直连全报 code=201「检测到有新版本，请重新登录」。抓包浏览器真实请求体定位根因：衣者新版前端 tokenInfo 瘦身为 {token,uid,cid}，**v 移到 localStorage['version']（前端构建hash）、cv 固定 '4.18.0'**。修复：harvest-auth.mjs storageScan 在 v 为空时回填 v=ls.version、cv='4.18.0'。v 缺失是衣者 code=201 的充分条件——**check-login 的 API 实测信号用的是 get_user_info（不带v也过），与业务接口（带v校验）存在信号差**，check-login 已实测覆盖此场景（业务API轮询监听里首个带v的请求才是权威信号——本轮即靠直连失败暴露）。
+- 测试期发现 ingest.mjs 对仅 poll 批次（无 morning 文件）会崩（yFinance null），属既有边界非本次改动引入——本次以补采 morning 批次绕过，**留待后续加固**（readJson null 兜底）。
+- 复现路径已固化：任何「code=201 检测到有新版本」类报错先怀疑 v/cv 过期/缺失，用 cdp-eval 抓浏览器真实请求体对比。
+
+## V1.9.4（2026-11-05 skill 改名 suyi-scm-collector）
+- skill 本名/目录名统一改为 **`suyi-scm-collector`**（用户要求，与仓库 suyi-fde、比特窗口 suyi 形成统一命名）：SKILL.md name 字段、全套文档标题、`@skill:` 定时任务提示词、部署路径示例（`skills/suyi-scm-collector/`、`D:\suyi-scm-collector`）。
+- **不变**：数据根目录仍为 `~/WorkBuddy/scm-collector-data/`（SCM_DATA_HOME 可覆盖，历史数据零迁移）；skill 调用还可用描述触发（跑采集/出日报等触发词不变）；脚本与窗口层无任何改动。
+- 改名前备份：~/WorkBuddy/scm-collector-data/.backup-skill-prerename-20261105.tar.gz。
+- ⚠️ 已配置的 WorkBuddy 定时任务如引用了旧名 `@skill:scm-collector`，下次执行前需把 prompt 里旧名替换为新名（references/排程.md 已同步新名）。
+
+## V1.9.3（2026-11-05 登录判定机制重写 + 发布前审查修复）
+- **check-login 判定机制重写（用户拍板）**：不再读 storage/IndexedDB，改三信号判定——①页面跳登录页/可见密码框（最高优先级）②**浏览器内业务API实测**（CDP Network 只读监听页面自己发的请求读响应体：衣者 code=200/201、多客 err=0/≠0）③业务页 complete 稳定8秒不跳登录页。背景：storage 版判定在多客（key 在 IndexedDB）上误报未登录；API 实测才是登录态的最直接证据，且与第1步直连的 code=201 判定同源。
+- **发布前审查修复 5 bug**：
+  1. check-login 衣者 hasCreds 把整个 {key:value} 串当 JSON.parse 必失败（已随 storage 机制废弃）
+  2. cdp-eval.mjs 用 process.env.HOME（Windows undefined 必崩）→ os.homedir()
+  3. cdp.mjs waitPageStable 稳定判定逻辑自相矛盾（stableMs 实际无效、首次 complete 前永不返回）→ 重写
+  4. capture-pages.mjs 默认端口硬编码 9222（比特窗口动态端口必然失联）→ 默认经 bit.mjs 自动发现，--port 仍可覆盖
+  5. 多客已登录被误判未登录（storage/IDB 机制缺陷）→ API 实测机制根治
+- **验证**：两系统真实已登录 → ok:true exit=0（API code=200/err=0 实测证据）；多客标签页停登录页但会话有效时 API 仍 err=0 → 判已登录（与实际行为一致）；全脚本 node --check 通过；Windows 兼容（无 darwin 专属调用、homedir() 替代 HOME、硬编码路径零残留）。
+- release 判定：**可发布**（两平台依赖仅 Node22+python3+比特客户端；bit.mjs 的 mcp.json 读取在无该文件时安全降级为报错提示）。
+
+## V1.9.1（2026-11-05 采集窗口改名 suyi）
+- 用户要求采集窗口 name 从 `scm-collector` 改为 **`suyi`**（与仓库 suyi-fde 呼应）。改动：bit.mjs WINDOW_NAME 常量、比特窗口实际名称（browser-update，id 不变 1baea5c1...）、SKILL/INSTALL/README/采集兜底 全部文档引用。skill 名与仓库/数据目录名不变。
+- 定位机制不变：默认按 name 精确匹配（API 模糊查询 + 代码 `===` 过滤防误命中），`SCM_BIT_WINDOW_ID` 环境变量可强制指定 id。
+
+## V1.9（2026-11-05 浏览器底座切换：比特浏览器替代 chrome-devtools MCP）
+- **chrome-devtools MCP 彻底移除**（mcp.json 已删该 server；用户拍板"彻底去掉"+"裸CDP"）。动机：比特浏览器每个窗口打开后即标准 CDP 端点（已实测 chrome-devtools 可挂载且用户数据一致），但 MCP 只能被动等 AI 调工具；直连采集架构下脚本本身就能跑裸 CDP（零依赖），省一层 MCP、定时任务无人值守更稳。
+- **新增 4 个脚本**（全部零 npm 依赖，Node 22 内置 WebSocket）：
+  - `scripts/bit.mjs`：比特 Local API 客户端——定位/幂等拉起采集窗口（当时命名 scm-collector，V1.9.1 已改 suyi），返回动态 CDP 端口；API key 单一来源 ~/.workbuddy/mcp.json bitbrowser 配置（SCM_BIT_API/SCM_BIT_API_KEY/SCM_BIT_WINDOW_ID 可覆盖）
+  - `scripts/cdp.mjs`：极简裸 CDP 客户端库（附加/收发/Runtime.evaluate求值/标签页列表新建/页面稳定等待）
+  - `scripts/check-login.mjs`：第0步登录态硬校验一条命令化——拉窗口+开两系统页+**storage 凭据真值判定**（实测教训：衣者 SPA 未登录先短暂呈现业务页 URL 再客户端跳转登录页，只看 URL/快照会误判已登录）；自动追加 login-events.jsonl；退出码 0/1/2=全登录/有未登录/浏览器异常
+  - `scripts/cdp-eval.mjs`：通用页面执行工具（兜底B/登录排查的"AI之眼"）——--list 列标签页、--system+--js 只读求值、--url 导航、--out 大结果落文件
+- **harvest-auth.mjs**：端口发现前置比特分支（bit.mjs 拿端口→端口上有两系统页面即直接采用，跳过 netstat 全扫描）；比特离线回落原端口扫描（兼容旧形态）
+- **采集窗口落地**：比特浏览器建采集窗口（当时命名 scm-collector，V1.9.1 改 suyi；id=1baea5c1f57a490897e7fa279fa5131a，noproxy 无代理直连，Windows/Chrome147 指纹）；与既有 001~009 海外 socks5 代理窗口严格隔离（衣者/多客走美国IP会触发风控）。实测 open 幂等（重复 open 返回同端口）；CDP /json/version 标准响应。
+- **mcp.json 修正**：bitbrowser 从顶层挪进 mcpServers（原位置不生效）；chrome-devtools 删除。
+- **SKILL.md 升 V1.8→内版本 1.9**（版本号头 1.8.0）：第0步改一条命令 check-login.mjs；MCP 白名单改"比特 Local API + 裸 CDP"；异常速查增比特客户端/API key/窗口缺失三行。references/采集兜底.md 附A重写（比特五步排查链，cdp-eval 收割替代 MCP 请求文件导入）、附B 操作全量翻译成 cdp-eval 版本、实测事实增补 8 条（动态端口/SPA跳转/指纹/key单一来源/多浏览器隔离等）。
+- **验证**：check-login 两系统未登录判定✓（新窗口本无登录态；修判定逻辑后衣者误报"已登录"已消除）；cdp-eval 三模式（--list/--js/导航）✓；harvest-auth 比特分支命中✓；login-events.jsonl 落盘✓。
+- **遗留**：两系统尚未在窗口内登录（用户下次操作）；capture-pages.mjs 自身端口扫描未逐一验证（依赖同一 discoverPorts 逻辑，待首跑兜底时验证）。
+- 备份：改造前完整备份 ~/WorkBuddy/scm-collector-data/.backup-skill-pre-bitbrowser-20261105.tar.gz（358文件/1.4MB）。
+
+## V1.6（2026-11-05 数据外置·跨平台通用版）
+- **代码与数据彻底分离**：skill 目录只留代码（scripts/config/references/文档），运行时数据全部外置到数据根目录——默认 `~/WorkBuddy/scm-collector-data/`，环境变量 `SCM_DATA_HOME` 可覆盖，首次运行自动创建。日常采集/出日报**不再触碰 skill 目录**（此前 out/state/data 会随运行膨胀，导致 skill 每次被判定"更新"）
+- **跨平台（Mac/Windows 通用）**：
+  - 全部 22 处 `new URL(import.meta.url).pathname` 写法改为 `fileURLToPath(import.meta.url)`（Windows 下 pathname 会产生 `/C:/...` 坏路径）
+  - 全部硬编码 `/Users/colin/...` 绝对路径（14 个 py 脚本 + 11 个 mjs 脚本）改为基于脚本位置动态推导，部署到任何用户任何系统零配置
+  - 凭据收割端口发现为纯 TCP 探测（默认 9222），无 macOS 专属命令
+- **脚本改动面**：62 个脚本（35 mjs + 26 py + 1 修复）加入 `dataHome`/`DATA_HOME` 变量并将 state/data/out 引用重定向；`config/` 引用保留在 skill 目录
+- **验证**：全部脚本语法检查通过；ingest.mjs 实跑写入新数据目录、skill 目录零写入；build-production-report.py 端到端跑通（config 读代码目录、数据读写均在数据目录）
+- 已知无关缺陷记录：build-sample-report-excel.py 在含 None 数值的数据集上会抛 TypeError（原版脚本同样崩溃，与本次改造无关，待后续修复）
 
 ## V2.3（2026-10-26 落地，2026-11-03 固化迁移版）
 - 新增**生产监控日报链路**（10-23 生产会议需求，与经营日报/销售报表并列的第三条独立链路）：
@@ -18,7 +59,7 @@
   - 规则（老板拍板）：数量偏差>1%且>2件、出货多出零容差、货期=预计完工日优先/裁床开工+7天兜底、物料负结存红/主料剩余≥50可复用、工厂按逾期单数分档（≥5红）
   - 口径全文：references/生产监控口径.md（改规则先改文档再改代码）
 - **可迁移性设计**：脚本全相对路径（skill 根目录自解析），参数外置 config/production-params.json（可选，缺省=会议拍板值），依赖仅 python3+openpyxl；换设备登录衣者后跑同两条命令得相同结果。已用 2026-10-26 历史采集数据回归验证：59 数量异常（多5/少54）/65 货期逾期/709 辅料负结存/102 主料剩余，与首版交付一致。
-- 未纳入模块（前置未满足，详见口径文档）：采购↔裁床（预裁数口径待老板）、次品（多客次品仓待阿军）、损耗率（待定标）、4天备货推送（缺在手量字段）。
+- 未纳入模块（前置未满足，详见口径文档）：采购↔裁床（预裁数口径待老板）、次品（多客次品仓待生产对接人）、损耗率（待定标）、4天备货推送（缺在手量字段）。
 - SKILL.md：触发词新增「生产日报/生产监控/裁床出货对不上/货期逾期」；references 索引表补生产监控口径.md。
 
 - **V1.7 2026-10-08（未登录零数据回答）**：登录阻断再加码——未登录时**不做任何数据类回答**：不呈现任何产出文件（含当日既有日报）、不发数据摘要/表格，唯一输出=登录提醒通知。取消 V1.6 的「重发当日既有日报不受限」例外，改为全面禁止。背景：10-08 17:43 自动化在两系统未登录下仍呈现了既有日报全文，用户要求未登录时只通知登录、其余一概不做。
@@ -38,19 +79,19 @@
 - user-callback：用户明确"我需要的是给我日报"——日报=每日增量数据，静态内容一律移出工作簿。
 
 ## V1.8（2026-10-10）
-- 新增销售报表链路（柳红14项需求）：refresh-recent增量刷单 → build-sales-report-v2 → build-sales-dashboard-v2
+- 新增销售报表链路（销售负责人14项需求）：refresh-recent增量刷单 → build-sales-report-v2 → build-sales-dashboard-v2
 - 新增客户账户合并（同人归并）：build-dedup-groups（同名+同手机号并查集）+ audit-client-counts 审计表；报表全指标按合并口径
 - 新增 config/sales-params.json（内部账户清单/告急线/vip对应/当季定义，拍板后改配置生效）
 - 新增 references/销售报表排程.md（定时vs按需分类、定时任务配置、脚本速查）；SKILL.md 挂接触发词「跑销售日报」
 - 探明多客商品详情"购买客户"页签=按vip等级分组+脱敏；核对客户明细走财务→单据搜索
 
 ## V1.9（2026-10-10 下午）
-- 新增 Excel 交付链路：fetch-goods-pics.mjs（商品图批量下载：analysis/get_goods_detail 取 hash → CDN cn-cdn-oss.duoke.net/user_TENANT/<hash>.jpeg，缓存 state/goods-pics/）+ build-sales-excel.py（openpyxl 11 sheet，商品类 sheet 嵌图，需 Pillow）
+- 新增 Excel 交付链路：fetch-goods-pics.mjs（商品图批量下载：analysis/get_goods_detail 取 hash → CDN cn-cdn-oss.duoke.net/user_19228/<hash>.jpeg，缓存 state/goods-pics/）+ build-sales-excel.py（openpyxl 11 sheet，商品类 sheet 嵌图，需 Pillow）
 - 图片嵌入规格：图片列固定第2列、140px 缩略图、冻结从图片列后开始、无图标注"无图"
 - 用户交付偏好：**只要 Excel（xlsx），不要 md/json**——后续日报产出以 Excel 为主
 
 ## V2.0（2026-10-10 15:00）
-- Excel sheet 结构按柳红 14 项需求维度重排为 21 个 sheet，编号+需求标签命名（01·日周月总览【需求9】…21·流失三档【需求10】）
+- Excel sheet 结构按销售负责人 14 项需求维度重排为 21 个 sheet，编号+需求标签命名（01·日周月总览【需求9】…21·流失三档【需求10】）
 - 补齐此前缺失维度：新老客占比(5)/月未下单(3附)/导购(4)/新客未复购(6)/老客断档(6)/ABCD(8)/补单TOP(2)/新客月度(7)/新品客户数TOP10(1)/库存三表拆分(积压/告急/欠货)
 - build-sales-report-v2.mjs：jsonOut 补 reorder_top_30d + new_client_monthly；补单聚合修正为合并组口径
 - 商品类 10 个 sheet 嵌图 441 张
@@ -70,7 +111,7 @@
 - refresh-recent 窗口参数化修正（此前硬编码10-10漏了10-11/12数据）
 
 ## V2.3（2026-10-12 13:45 skill 定稿同步）
-- SKILL.md 销售报表节更新为 V2.2 口径全集（柳红三轮确认：10-09需求会/10-10修正/10-12逐表核对+增量）
+- SKILL.md 销售报表节更新为 V2.2 口径全集（销售负责人三轮确认：10-09需求会/10-10修正/10-12逐表核对+增量）
 - references/销售报表排程.md 重写为定稿版（导购三张发送节奏、39 sheet 清单、脚本速查、待拍板）
 - refresh-recent.mjs 窗口彻底动态化（20天前~今天，杜绝再漏日期）
 - 当前定版产出：out/销售数据报表-2026-10-12.xlsx（39 sheet，V2.2）

@@ -9,13 +9,16 @@
 //      可选：duoke_orders_30d.jsonl（缺失时地区板块跳过并提示先跑 scripts/fetch-orders-region.mjs --days 30）
 // 用法：node scripts/restock-deep.mjs [--date YYYY-MM-DD]
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const argDate = argv.includes('--date') ? argv[argv.indexOf('--date') + 1] : null;
 
-const db = JSON.parse(fs.readFileSync(path.join(root, 'state', 'db.json'), 'utf8'));
+const db = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'db.json'), 'utf8'));
 const dates = Object.keys(db.days).sort();
 const date = argDate || dates[dates.length - 1];
 const slots = db.days[date] || {};
@@ -23,12 +26,12 @@ const day = slots.am || slots.pm;
 if (!day) { console.error(`[deep] 无 ${date} 数据`); process.exit(1); }
 const slot = slots.am ? 'am' : 'pm';
 
-const alerts = JSON.parse(fs.readFileSync(path.join(root, 'out', `alerts-${date}.json`), 'utf8'));
+const alerts = JSON.parse(fs.readFileSync(path.join(dataHome, 'out', `alerts-${date}.json`), 'utf8'));
 const ra = alerts.restock_alerts || [];
 if (!ra.length) { console.error('[deep] 无补货预警（先跑 alert-rules.mjs）'); process.exit(1); }
 
 // —— 原始文件读取（当日槽 → 另一槽回落） ——
-const rawBase = path.join(root, 'data', 'raw', date);
+const rawBase = path.join(dataHome, 'data', 'raw', date);
 function readRaw(file) {
   for (const s of [slot, slot === 'am' ? 'pm' : 'am']) {
     const p = path.join(rawBase, s, file);
@@ -158,7 +161,7 @@ const out = {
     net_total: rows.reduce((a, r) => a + r.net, 0),
   },
 };
-fs.writeFileSync(path.join(root, 'out', `restock-deep-${date}.json`), JSON.stringify(out, null, 1));
+fs.writeFileSync(path.join(dataHome, 'out', `restock-deep-${date}.json`), JSON.stringify(out, null, 1));
 
 // —— Markdown 报告 ——
 const L = [];
@@ -187,7 +190,7 @@ if (regionBlock) {
   L.push('解读要点：华南占比过半 → 秋款生命周期长（可穿至11月）、按上行系数上调；冬款看华南档口上冬装节奏（约10月中），不必赌北方降温（北方订单占比通常仅约10%）。');
 }
 L.push('', '---', '方法：净缺口=建议−在产；季节三分类（秋季上行/档口预占/冬季慢热）详见 SKILL.md 第2.5步。');
-fs.writeFileSync(path.join(root, 'out', `补货深度分析-${date}.md`), L.join('\n'));
+fs.writeFileSync(path.join(dataHome, 'out', `补货深度分析-${date}.md`), L.join('\n'));
 
 console.log(`[deep] ${date}：${rows.length} 款 → out/restock-deep-${date}.json + out/补货深度分析-${date}.md`);
 console.log(`[deep] 追加 ${out.summary.need_new_order} 款/净缺口 ${out.summary.net_total} 件；催货 ${out.summary.chase_only}；核实 ${out.summary.verify_stall}；缓 ${out.summary.hold}`);

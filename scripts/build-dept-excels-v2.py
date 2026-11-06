@@ -5,9 +5,7 @@
 # 生产: +工厂全量计分卡(2779批) +省份级订单分布
 # 销售: +31省订单分布 +流失全量225家
 # 财务: +欠款客户明细98家逐户
-import os, sys
-import json
-from pathlib import Path
+import json, os, sys
 from datetime import datetime
 from collections import defaultdict
 
@@ -40,10 +38,11 @@ al_c = Alignment(horizontal="center", vertical="center", wrap_text=True)
 al_l = Alignment(horizontal="left", vertical="center", wrap_text=True)
 al_r = Alignment(horizontal="right", vertical="center")
 
-SKILL = str(Path(__file__).resolve().parent.parent)
-RAW = f"{SKILL}/data/raw/2026-10-09/pm"
-RAW_T = f"{SKILL}/data/raw/2026-10-10/pm"
-OUTDIR = f"{SKILL}/out"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # skill代码根目录（可移植）
+DATA_HOME = os.environ.get('SCM_DATA_HOME') or os.path.join(os.path.expanduser('~'), 'WorkBuddy', 'scm-collector-data')  # 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+RAW = f"{DATA_HOME}/data/raw/2026-10-09/pm"
+RAW_T = f"{DATA_HOME}/data/raw/2026-10-10/pm"
+OUTDIR = f"{DATA_HOME}/out"
 TODAY = "2026-10-10"
 
 def load_jsonl(path):
@@ -377,7 +376,7 @@ for n, a, v, add_id, pt in debts:
 add_sheet(wb4, 6, "欠款客户明细(98家)",
     ["客户", "欠款(¥)", "占总欠款", "等级", "最近回款", "处理动作"],
     debt_rows, [22, 12, 9, 8, 11, 22],
-    note=f"总欠款¥{total_debt:,.0f}。注意Top5多为内部/关联账户(郑玲洁两户¥77万、泉州刻为工厂、BSJ公司订单、EHT、特卖会配货)——先甄别内部往来再催收,剔除后真实客户欠款约¥100万量级。9-22会议已定:内部账户清单待柳红确认。",
+    note=f"总欠款¥{total_debt:,.0f}。注意Top5多为内部/关联账户(员工A两户¥77万、工厂主体工厂、BSJ公司订单、EHT、特卖会配货)——先甄别内部往来再催收,剔除后真实客户欠款约¥100万量级。9-22会议已定:内部账户清单待销售负责人确认。",
     row_alert=lambda row, i: red_fill(row, i) if isinstance(row[1], (int, float)) and row[1] > 100000 else None,
 )
 

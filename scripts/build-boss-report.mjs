@@ -5,12 +5,14 @@
 // 输出：out/老板日报-<日期>.md
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argDate = (process.argv.find(a => a.startsWith('--date')) || '').split('=')[1]
   || process.argv[process.argv.indexOf('--date') + 1] || '2026-10-09';
-const OUT = path.join(ROOT, 'out', `老板日报-${argDate}.md`);
+const OUT = path.join(dataHome, 'out', `老板日报-${argDate}.md`);
 
 // ---------- 工具 ----------
 const j = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; } };
@@ -24,7 +26,7 @@ const DATA_DATE = argDate;
 const TODAY = new Date(DATA_DATE);
 
 // ---------- 数据装载（缺项容错） ----------
-const db = j(path.join(ROOT, 'state/db.json'));
+const db = j(path.join(dataHome, 'state/db.json'));
 const day = db?.days?.[DATA_DATE]?.am || null;
 if (!day) { console.error(`[硬停] db.json 中无 ${DATA_DATE} 数据槽`); process.exit(1); }
 
@@ -41,8 +43,8 @@ const prodList = jsonl(path.join(ROOT, `data/raw/${DATA_DATE}/am/yizhe_productio
   .concat(jsonl(path.join(ROOT, `data/raw/${DATA_DATE}/pm/yizhe_production_list.jsonl`)));
 const goodsRaw = jsonl(path.join(ROOT, `data/raw/${DATA_DATE}/pm/duoke_goods.jsonl`));
 const details = jsonl(path.join(ROOT, `data/raw/${DATA_DATE}/pm/duoke_order_details.jsonl`));
-const alerts = j(path.join(ROOT, 'out', `alerts-${DATA_DATE}.json`)) || {};
-const restock = j(path.join(ROOT, 'out', `restock-deep-${DATA_DATE}.json`)) || {};
+const alerts = j(path.join(dataHome, 'out', `alerts-${DATA_DATE}.json`)) || {};
+const restock = j(path.join(dataHome, 'out', `restock-deep-${DATA_DATE}.json`)) || {};
 
 // 商品档案索引：款号 → {season, ctime}
 const goodsMap = new Map();
@@ -266,7 +268,7 @@ let fragItems = [];         // 模块三填充，拍板区引用
   sec('四、组织人效（30 日）');
   const sellers = [...seller30.entries()].sort((a, b) => b[1] - a[1]);
   L.push(`**导购（30 日成交额）**：Top3 ${sellers.slice(0, 3).map(([k, v]) => `${k} ${wan(v)}`).join('｜')}${sellers.length > 6 ? `；Bottom3 ${sellers.slice(-3).map(([k, v]) => `${k} ${wan(v)}`).join('｜')}` : ''}。`);
-  L.push(`**客户资产**：30 日成交 ${custCnt30().size} 家、复购率见速览；月未下单客户与流失三档名单见销售报表 V2.5（按柳红口径）。`);
+  L.push(`**客户资产**：30 日成交 ${custCnt30().size} 家、复购率见速览；月未下单客户与流失三档名单见销售报表 V2.5（按销售负责人口径）。`);
   L.push(`**9 月绩效结论（引用绩效月报）**：采购到厂超期率 63.4%（王锡池 76.8% vs 肖小平 38.6%，差一倍但出货周期接近——瓶颈在流程不在人）；52 个可归因延误单中 49 个为工厂段（恒生 13 批超 5 天+）→ 问责指向工厂管理，不问责跟单员；设计师下单转化：SOSO 133% / 黄蓓蕾 82% / 陈佩哲 48% → 低转化者定向辅导。`);
 }
 function custCnt30() { const m = new Map(); for (const r of orders30) if (num(r.calc_price) > 0) m.set(r.client_id, 1); return m; }

@@ -5,9 +5,12 @@
 // 后续 ingest/match/alert/reconcile/report 脚本链完全不变。
 // 红线：本文件不访问任何网络，仅生成本地文件。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
 const argv = process.argv.slice(2);
 const args = {};
 for (let i = 0; i < argv.length; i++) {
@@ -18,14 +21,14 @@ for (let i = 0; i < argv.length; i++) {
 }
 const date = args.date || new Date().toISOString().slice(0, 10);
 const slot = args.slot || (new Date().getHours() >= 14 ? 'pm' : 'am'); // 与 ingest.mjs 槽位口径一致
-let rawDir = path.join(root, 'data', 'raw', date, slot);
+let rawDir = path.join(dataHome, 'data', 'raw', date, slot);
 if (fs.existsSync(rawDir) && fs.readdirSync(rawDir).length > 0) {
   // 防污染护栏：槽位已有数据时隔离Demo产物（历史事故：am槽曾混入mock）
-  rawDir = path.join(root, 'data', 'raw', date, '_quarantine_mock');
+  rawDir = path.join(dataHome, 'data', 'raw', date, '_quarantine_mock');
   console.warn(`[mock-capture] ⚠️ ${date}/${slot} 槽已有数据，Demo产物改写入 _quarantine_mock/ 防污染`);
 }
 fs.mkdirSync(rawDir, { recursive: true });
-fs.mkdirSync(path.join(root, 'state'), { recursive: true });
+fs.mkdirSync(path.join(dataHome, 'state'), { recursive: true });
 fs.writeFileSync(path.join(rawDir, '_source_demo'), new Date().toISOString()); // Demo标记：ingest据此标注数据来源
 
 // —— 确定性伪随机（同日期可复现） ——
@@ -147,7 +150,7 @@ const orders = Array.from({ length: 25 }, (_, i) => {
   return {
     number: String(1192600 + i), type: '1',
     shop_name: pick(['素一（十三行2918档）', '手山（十三行7楼D29-30A）']),
-    customer_name: pick(clients), seller_name: pick(['朱路琪', '何雪荧', '袁建均']),
+    customer_name: pick(clients), seller_name: pick(['demo店员A', 'demo店员B', 'demo店员C']),
     goods_quantity: isReturn ? -qty : qty, calc_price: String(f2((isReturn ? -1 : 1) * qty * ri(80, 150))),
     ctime: String(Math.floor(new Date(date).getTime() / 1000) - ri(0, 86400))
   };
@@ -157,7 +160,7 @@ write('duoke_orders.jsonl', orders);
 const payments = Array.from({ length: 20 }, (_, i) => ({
   number: String(114330 + i), price: String(f2(ri(300, 20000))),
   payment_name: pick(['扫码支付', '银行转账', '现金']), pay_channel: 'order_pay',
-  client_name: pick(clients), seller_name: pick(['朱路琪', '何雪荧', '袁建均']),
+  client_name: pick(clients), seller_name: pick(['demo店员A', 'demo店员B', 'demo店员C']),
   ctime: String(Math.floor(new Date(date).getTime() / 1000) - ri(0, 86400))
 }));
 write('duoke_payments.jsonl', payments);
@@ -174,7 +177,7 @@ write('yizhe_stat_summary.json', { code: '200', data: { build: { select: 45, tod
 write('duoke_customers.jsonl', clients.map((c, i) => ({
   id: String(15000 + i), name: c, phone: String(ri(13000000000, 18999999999)),
   debt: pick(['0.00', '0.00', String(f2(ri(500, 30000)))]), days_not_purchased: ri(0, 120),
-  goods_num: ri(1, 40), staff_name: pick(['朱路琪', '何雪荧', '袁建均']), address: ''
+  goods_num: ri(1, 40), staff_name: pick(['demo店员A', 'demo店员B', 'demo店员C']), address: ''
 })));
 
 console.log('[mock-capture] 完成。下一步：node scripts/ingest.mjs --date ' + date + ' --slot ' + slot);

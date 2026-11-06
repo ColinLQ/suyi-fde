@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 // report-daily.mjs — 生成经营日报(markdown) + 五部门分版 + 看板H5。零网络，纯落盘产出（不负责推送）。
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const db = JSON.parse(fs.readFileSync(path.join(root, 'state', 'db.json'), 'utf8'));
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dataHome = process.env.SCM_DATA_HOME || path.join(os.homedir(), 'WorkBuddy', 'scm-collector-data'); // 运行时数据根目录(state/data/out)，SCM_DATA_HOME 可覆盖
+const db = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'db.json'), 'utf8'));
 const dates = Object.keys(db.days).sort();
 const a = process.argv.find(x => x.startsWith('--date='));
 const date = a ? a.split('=')[1] : dates[dates.length - 1];
 const slots = db.days[date] || {};
 const day = slots.am || slots.pm;
-const alerts = JSON.parse(fs.readFileSync(path.join(root, 'out', `alerts-${date}.json`), 'utf8'));
-const recon = JSON.parse(fs.readFileSync(path.join(root, 'out', `reconcile-${date}.json`), 'utf8'));
-const mapping = JSON.parse(fs.readFileSync(path.join(root, 'state', 'mapping.json'), 'utf8'));
+const alerts = JSON.parse(fs.readFileSync(path.join(dataHome, 'out', `alerts-${date}.json`), 'utf8'));
+const recon = JSON.parse(fs.readFileSync(path.join(dataHome, 'out', `reconcile-${date}.json`), 'utf8'));
+const mapping = JSON.parse(fs.readFileSync(path.join(dataHome, 'state', 'mapping.json'), 'utf8'));
 
 const f = n => Number(n || 0).toLocaleString('zh-CN');
 const money = n => '¥' + Number(n || 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
@@ -97,7 +100,7 @@ ${Object.entries(bySeller).sort((a, b) => b[1] - a[1]).map(([n, v]) => `- ${n}�
 ${oversold.length ? `- ⛔ 超卖欠货：${oversold.length} 款库存为负（源系统真实状态：已接单未回货），累计缺口 ${f(oversold.reduce((a, x) => a + Math.abs(x.stock), 0))} 件，已列最高优先级预警\n` : ''}${alerts.stale_oversold?.length ? `- 🧊 呆滞超卖：另有 ${alerts.stale_oversold.length} 款负库存但30日零动销（历史遗留缺口 ${f(alerts.stale_oversold.reduce((a, x) => a + x.gap, 0))} 件），不建议补货，建议安排盘点核销\n` : ''}- 数据截至：${(day.meta.captured_at || '').replace('T', ' ').slice(0, 16)}（来源：${srcDesc}${stockNote ? '；' + stockNote : ''}）
 `;
 
-const outDir = path.join(root, 'out'); fs.mkdirSync(outDir, { recursive: true });
+const outDir = path.join(dataHome, 'out'); fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, `日报-${date}.md`), md);
 
 // ============ 五部门分版（PRD US-01：研发/生产/销售/财务/仓库 各一份） ============
